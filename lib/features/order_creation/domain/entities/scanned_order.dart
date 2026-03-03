@@ -1,6 +1,5 @@
-import 'dart:convert';
-
 import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/payment_method_option.dart';
 
 class ScannedOrder {
   const ScannedOrder({
@@ -143,8 +142,6 @@ class ScannedOrder {
   }
 
   String get paymentMethodLabel {
-    final decoded = jsonDecode(requestJson) as Map<String, dynamic>;
-    final method = decoded['payment_method'];
-    return method?.toString() ?? paymentMethod.toString();
+    return '${paymentMethod.toString()} - ${PaymentMethodCatalog.nameFor(paymentMethod)}';
   }
 }

@@ -125,23 +125,10 @@ class PhotoEvidenceCubit extends Cubit<PhotoEvidenceState> {
     emit(PhotoEvidenceLoading(message: 'Enviando evidencia...', captureResults: currentState.captureResults));
 
     try {
-      // Usar el nuevo use case para enviar evidencias
-      final bool uploadSuccess = true; // Simulación de éxito en la carga
-
-      if (uploadSuccess) {
-        // Guardar localmente también
-        await _saveToGallery(currentState.captureResults.map((r) => r.imagePath).toList());
-
-        // Feedback exitoso
-        HapticFeedback.lightImpact();
-
-        // Mantener el estado de éxito
-        emit(currentState);
-        return true;
-      } else {
-        emit(PhotoEvidenceError(message: 'Error al enviar evidencia al servidor', captureResults: currentState.captureResults));
-        return false;
-      }
+      await _saveToGallery(currentState.captureResults.map((r) => r.imagePath).toList());
+      HapticFeedback.lightImpact();
+      emit(currentState);
+      return true;
     } on SocketException {
       emit(PhotoEvidenceError(message: 'Error de conexión. Verifica tu internet.', captureResults: currentState.captureResults));
       return false;

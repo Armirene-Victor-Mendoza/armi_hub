@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-
 class ApiConfig {
   static const String _baseUrlFromDefine = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
@@ -12,10 +10,6 @@ class ApiConfig {
   factory ApiConfig.fromEnvironment() {
     if (_baseUrlFromDefine.isNotEmpty) {
       return ApiConfig(baseUrl: _baseUrlFromDefine);
-    }
-
-    if (kReleaseMode) {
-      return const ApiConfig(baseUrl: 'https://api.example.com');
     }
 
     if (Platform.isAndroid) {

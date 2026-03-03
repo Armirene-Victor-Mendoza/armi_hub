@@ -57,6 +57,32 @@ class ApiClient {
     }
   }
 
+  Future<ApiResponse> getJsonFromAbsoluteUrl(
+    String url, {
+    Duration timeout = const Duration(seconds: 20),
+    Map<String, String> extraHeaders = const <String, String>{},
+  }) async {
+    final uri = Uri.parse(url);
+
+    try {
+      final response = await _client
+          .get(
+            uri,
+            headers: <String, String>{
+              'Content-Type': 'application/json',
+              ...extraHeaders,
+            },
+          )
+          .timeout(timeout);
+
+      return ApiResponse(statusCode: response.statusCode, bodyRaw: response.body);
+    } on TimeoutException {
+      throw const ApiException('La solicitud excedio el tiempo de espera.');
+    } catch (error) {
+      throw ApiException('Error de red enviando solicitud: $error');
+    }
+  }
+
   void close() {
     _client.close();
   }

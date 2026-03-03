@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:armi_hub/core/theme/brand_colors.dart';
 import 'package:armi_hub/features/app_context/domain/entities/business_context.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/order_draft.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
@@ -106,9 +107,8 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
         );
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Revisar orden'),
-        ),
+        backgroundColor: BrandColors.bg,
+        appBar: AppBar(title: const Text('Revisar orden')),
         body: BlocBuilder<ReviewOrderCubit, ReviewOrderState>(
           builder: (context, state) {
             final draft = state.initialDraft;
@@ -120,139 +120,177 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
             _seedControllersIfNeeded(draft);
 
             return SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      if (draft.receiptImagePath.isNotEmpty)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            File(draft.receiptImagePath),
-                            height: 180,
-                            fit: BoxFit.cover,
+              child: ListView(
+                padding: const EdgeInsets.all(14),
+                children: <Widget>[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: BrandColors.topGradient,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Text(
+                      'Verifica los datos antes de crear la orden.',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (draft.receiptImagePath.isNotEmpty)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: BrandColors.card,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          File(draft.receiptImagePath),
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: BrandColors.card,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: _ReadonlyInfo(
+                            label: 'ID del comercio',
+                            value: widget.contextData.businessId.toString(),
                           ),
                         ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        initialValue: widget.contextData.businessId.toString(),
-                        enabled: false,
-                        decoration: const InputDecoration(labelText: 'business_id'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        initialValue: widget.contextData.storeId,
-                        enabled: false,
-                        decoration: const InputDecoration(labelText: 'store_id'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _totalController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'total_value'),
-                        validator: (value) {
-                          final parsed = double.tryParse((value ?? '').replaceAll(',', '.'));
-                          if (parsed == null || parsed <= 0) {
-                            return 'Ingresa un total valido mayor a 0';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        value: _paymentMethod,
-                        decoration: const InputDecoration(labelText: 'payment_method'),
-                        items: PaymentMethodCatalog.options
-                            .map(
-                              (option) => DropdownMenuItem<int>(
-                                value: option.code,
-                                child: Text('${option.code} - ${option.name}'),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: state.isSubmitting
-                            ? null
-                            : (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  _paymentMethod = value;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _firstNameController,
-                        decoration: const InputDecoration(labelText: 'first_name'),
-                        validator: _requiredValidator,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _lastNameController,
-                        decoration: const InputDecoration(labelText: 'last_name'),
-                        validator: _requiredValidator,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _addressController,
-                        decoration: const InputDecoration(labelText: 'address'),
-                        validator: _requiredValidator,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'phone'),
-                        validator: (value) {
-                          if ((value ?? '').trim().isEmpty) {
-                            return 'Campo obligatorio';
-                          }
-                          if (!RegExp(r'^[0-9+]{8,20}$').hasMatch(value!.trim())) {
-                            return 'Telefono invalido';
-                          }
-                          return null;
-                        },
-                      ),
-                      if (state.errorMessage != null) ...<Widget>[
-                        const SizedBox(height: 12),
-                        Text(
-                          state.errorMessage!,
-                          style: const TextStyle(color: Colors.red),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _ReadonlyInfo(
+                            label: 'ID de la tienda',
+                            value: widget.contextData.storeId,
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: state.isSubmitting
-                            ? null
-                            : () {
-                                if (!_formKey.currentState!.validate()) return;
-
-                                final total = double.parse(_totalController.text.replaceAll(',', '.'));
-                                final payload = draft.copyWith(
-                                  totalValue: total,
-                                  paymentMethod: _paymentMethod,
-                                  firstName: _firstNameController.text,
-                                  lastName: _lastNameController.text,
-                                  address: _addressController.text,
-                                  phone: _phoneController.text,
-                                );
-
-                                context.read<ReviewOrderCubit>().submit(payload);
-                              },
-                        icon: state.isSubmitting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.cloud_upload),
-                        label: Text(state.isSubmitting ? 'Enviando...' : 'Confirmar y crear orden'),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: BrandColors.card,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: <Widget>[
+                          TextFormField(
+                            controller: _totalController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'Valor total'),
+                            validator: (value) {
+                              final parsed = double.tryParse((value ?? '').replaceAll(',', '.'));
+                              if (parsed == null || parsed <= 0) {
+                                return 'Ingresa un total valido mayor a 0';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<int>(
+                            key: ValueKey<int>(_paymentMethod),
+                            initialValue: _paymentMethod,
+                            decoration: const InputDecoration(labelText: 'Metodo de pago'),
+                            items: PaymentMethodCatalog.options
+                                .map(
+                                  (option) => DropdownMenuItem<int>(
+                                    value: option.code,
+                                    child: Text('${option.code} - ${option.name}'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: state.isSubmitting
+                                ? null
+                                : (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      _paymentMethod = value;
+                                    });
+                                  },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _firstNameController,
+                            decoration: const InputDecoration(labelText: 'Nombre'),
+                            validator: _requiredValidator,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _lastNameController,
+                            decoration: const InputDecoration(labelText: 'Apellido'),
+                            validator: _requiredValidator,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _addressController,
+                            decoration: const InputDecoration(labelText: 'Direccion'),
+                            validator: _requiredValidator,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(labelText: 'Telefono'),
+                            validator: (value) {
+                              if ((value ?? '').trim().isEmpty) {
+                                return 'Campo obligatorio';
+                              }
+                              if (!RegExp(r'^[0-9+]{8,20}$').hasMatch(value!.trim())) {
+                                return 'Telefono invalido';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (state.errorMessage != null) ...<Widget>[
+                    const SizedBox(height: 10),
+                    Text(state.errorMessage!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    onPressed: state.isSubmitting
+                        ? null
+                        : () {
+                            if (!_formKey.currentState!.validate()) return;
+
+                            final total = double.parse(_totalController.text.replaceAll(',', '.'));
+                            final payload = draft.copyWith(
+                              totalValue: total,
+                              paymentMethod: _paymentMethod,
+                              firstName: _firstNameController.text,
+                              lastName: _lastNameController.text,
+                              address: _addressController.text,
+                              phone: _phoneController.text,
+                            );
+
+                            context.read<ReviewOrderCubit>().submit(payload);
+                          },
+                    icon: state.isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload_rounded),
+                    label: Text(state.isSubmitting ? 'Enviando...' : 'Confirmar y crear orden'),
+                  ),
+                ],
               ),
             );
           },
@@ -277,5 +315,31 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
       return 'Campo obligatorio';
     }
     return null;
+  }
+}
+
+class _ReadonlyInfo extends StatelessWidget {
+  const _ReadonlyInfo({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: BrandColors.mintSoft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF52606D))),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
   }
 }

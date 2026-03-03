@@ -1,30 +1,33 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/order_draft.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/payment_method_option.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:armi_hub/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('default payment method is Datafono (2)', () {
+    expect(PaymentMethodCatalog.defaultCode, 2);
+    expect(PaymentMethodCatalog.nameFor(2), 'Datafono');
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('order draft maps to create order request payload', () {
+    const draft = OrderDraft(
+      totalValue: 120.5,
+      paymentMethod: 2,
+      firstName: 'Juan',
+      lastName: 'Perez',
+      address: 'Av. Principal 123',
+      phone: '58412551511',
+      businessId: 45,
+      storeId: '0001',
+      receiptImagePath: '/tmp/receipt.jpg',
+      ocrRawText: 'TOTAL 120.5',
+      ocrTotal: 120.5,
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    final payload = draft.toCreateOrderRequest().toJson();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(payload['total_value'], 120.5);
+    expect(payload['payment_method'], 2);
+    expect(payload['business_id'], 45);
+    expect(payload['store_id'], '0001');
   });
 }

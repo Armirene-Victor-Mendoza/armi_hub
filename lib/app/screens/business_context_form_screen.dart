@@ -1,3 +1,5 @@
+import 'package:armi_hub/core/theme/brand_colors.dart';
+import 'package:armi_hub/features/app_context/domain/entities/branch_office.dart';
 import 'package:armi_hub/features/app_context/domain/entities/business_context.dart';
 import 'package:flutter/material.dart';
 
@@ -6,12 +8,14 @@ class BusinessContextFormScreen extends StatefulWidget {
     super.key,
     this.initialContext,
     required this.onSave,
-    this.title = 'Configurar comercio',
+    required this.loadBranchOffices,
+    this.title = 'Seleccionar tienda',
     this.popOnSave = true,
   });
 
   final BusinessContext? initialContext;
   final Future<void> Function(BusinessContext context) onSave;
+  final Future<List<BranchOffice>> Function(int businessId) loadBranchOffices;
   final String title;
   final bool popOnSave;
 
@@ -20,104 +24,275 @@ class BusinessContextFormScreen extends StatefulWidget {
 }
 
 class _BusinessContextFormScreenState extends State<BusinessContextFormScreen> {
+  static const int _kokoricoBusinessId = 10345;
+  static const String _kokoricoName = 'Kokoriko';
+
   final _formKey = GlobalKey<FormState>();
 
-  late final TextEditingController _businessIdController;
-  late final TextEditingController _storeIdController;
-
   bool _isSaving = false;
+  bool _isLoadingBranches = true;
+  String? _loadError;
+  List<BranchOffice> _branches = <BranchOffice>[];
+  int? _selectedBranchId;
+
+  BranchOffice? get _selectedBranch {
+    if (_selectedBranchId == null) return null;
+    for (final branch in _branches) {
+      if (branch.id == _selectedBranchId) {
+        return branch;
+      }
+    }
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
-    _businessIdController = TextEditingController(text: widget.initialContext?.businessId.toString() ?? '');
-    _storeIdController = TextEditingController(text: widget.initialContext?.storeId ?? '');
+    _fetchBranchOffices();
   }
 
-  @override
-  void dispose() {
-    _businessIdController.dispose();
-    _storeIdController.dispose();
-    super.dispose();
+  Future<void> _fetchBranchOffices() async {
+    setState(() {
+      _isLoadingBranches = true;
+      _loadError = null;
+    });
+
+    try {
+      final branches = await widget.loadBranchOffices(_kokoricoBusinessId);
+      if (!mounted) return;
+
+      final parsedStoreId = int.tryParse(widget.initialContext?.storeId ?? '');
+      BranchOffice? matching;
+      if (parsedStoreId != null) {
+        for (final branch in branches) {
+          if (branch.id == parsedStoreId) {
+            matching = branch;
+            break;
+          }
+        }
+      }
+
+      setState(() {
+        _branches = branches;
+        _selectedBranchId = matching?.id ?? (branches.isNotEmpty ? branches.first.id : null);
+        _isLoadingBranches = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingBranches = false;
+        _loadError = error.toString();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      backgroundColor: BrandColors.bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
+        child: Column(
+          children: <Widget>[
+            Container(
+              margin: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+              decoration: BoxDecoration(
+                gradient: BrandColors.topGradient,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: BrandColors.mint,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.storefront_rounded, color: BrandColors.dark),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: _buildBody(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_isLoadingBranches) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_loadError != null) {
+      return _ErrorState(
+        message: 'No se pudieron cargar las tiendas: $_loadError',
+        buttonLabel: 'Reintentar',
+        onPressed: _fetchBranchOffices,
+      );
+    }
+
+    if (_branches.isEmpty) {
+      return _ErrorState(
+        message: 'No hay tiendas disponibles para Kokoriko.',
+        buttonLabel: 'Recargar',
+        onPressed: _fetchBranchOffices,
+      );
+    }
+
+    final selectedBranch = _selectedBranch;
+
+    return Form(
+      key: _formKey,
+      child: ListView(
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: BrandColors.card,
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text('Ingresa el contexto con el que se crearan las ordenes.'),
-                const SizedBox(height: 16),
+                const Text('Comercio activo', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller: _businessIdController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'business_id'),
-                  validator: (value) {
-                    final parsed = int.tryParse(value ?? '');
-                    if (parsed == null || parsed <= 0) {
-                      return 'Ingresa un business_id valido';
-                    }
-                    return null;
-                  },
+                  initialValue: '$_kokoricoName ($_kokoricoBusinessId)',
+                  enabled: false,
+                  decoration: const InputDecoration(labelText: 'Comercio'),
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _storeIdController,
-                  decoration: const InputDecoration(labelText: 'store_id'),
-                  validator: (value) {
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Ingresa un store_id valido';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _isSaving
+                DropdownButtonFormField<int>(
+                  key: ValueKey<int?>(_selectedBranchId),
+                  initialValue: _selectedBranchId,
+                  decoration: const InputDecoration(labelText: 'Tienda'),
+                  isExpanded: true,
+                  items: _branches
+                      .map(
+                        (branch) => DropdownMenuItem<int>(
+                          value: branch.id,
+                          child: Text('${branch.name} (${branch.id})'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _isSaving
                       ? null
-                      : () async {
-                          if (!_formKey.currentState!.validate()) return;
-
+                      : (value) {
                           setState(() {
-                            _isSaving = true;
+                            _selectedBranchId = value;
                           });
-
-                          final payload = BusinessContext(
-                            businessId: int.parse(_businessIdController.text),
-                            storeId: _storeIdController.text.trim(),
-                          );
-
-                          try {
-                            await widget.onSave(payload);
-                            if (!mounted) return;
-                            if (widget.popOnSave) {
-                              Navigator.of(context).pop(payload);
-                            }
-                          } catch (error) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('No se pudo guardar: $error')),
-                            );
-                          } finally {
-                            if (mounted) {
-                              setState(() {
-                                _isSaving = false;
-                              });
-                            }
-                          }
                         },
-                  child: Text(_isSaving ? 'Guardando...' : 'Guardar contexto'),
+                  validator: (value) => value == null ? 'Selecciona una tienda' : null,
                 ),
               ],
             ),
           ),
+          if (selectedBranch != null) ...<Widget>[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: BrandColors.card,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(selectedBranch.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Text('Ciudad: ${selectedBranch.city}'),
+                  Text('Estado: ${selectedBranch.state}'),
+                  Text('Direccion: ${selectedBranch.address}'),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _isSaving
+                ? null
+                : () async {
+                    if (!_formKey.currentState!.validate()) return;
+                    final branch = _selectedBranch;
+                    if (branch == null) return;
+
+                    setState(() {
+                      _isSaving = true;
+                    });
+
+                    final payload = BusinessContext(
+                      businessId: _kokoricoBusinessId,
+                      storeId: branch.storeId,
+                      businessName: _kokoricoName,
+                      storeName: branch.name,
+                    );
+
+                    try {
+                      await widget.onSave(payload);
+                      if (!context.mounted) return;
+                      if (widget.popOnSave) {
+                        Navigator.of(context).pop(payload);
+                      }
+                    } catch (error) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('No se pudo guardar: $error')),
+                      );
+                    } finally {
+                      if (mounted) {
+                        setState(() {
+                          _isSaving = false;
+                        });
+                      }
+                    }
+                  },
+            child: Text(_isSaving ? 'Guardando...' : 'Guardar seleccion'),
+          ),
+          const SizedBox(height: 14),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.buttonLabel, required this.onPressed});
+
+  final String message;
+  final String buttonLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: BrandColors.card,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: onPressed, child: Text(buttonLabel)),
+          ],
         ),
       ),
     );

@@ -12,20 +12,6 @@ class PaymentMethodCatalog {
     PaymentMethodOption(code: 1, name: 'Efectivo'),
     PaymentMethodOption(code: 2, name: 'Datafono'),
     PaymentMethodOption(code: 3, name: 'Transaccion en linea'),
-    PaymentMethodOption(code: 5, name: 'Bancamiga'),
-    PaymentMethodOption(code: 6, name: 'Transaccion en linea'),
-    PaymentMethodOption(code: 7, name: 'Pago movil'),
-    PaymentMethodOption(code: 8, name: 'Debito inmediato'),
-    PaymentMethodOption(code: 31, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 32, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 33, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 34, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 35, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 36, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 37, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 38, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 39, name: 'Aseguradoras'),
-    PaymentMethodOption(code: 100, name: 'Otro'),
   ];
 
   static String nameFor(int code) {

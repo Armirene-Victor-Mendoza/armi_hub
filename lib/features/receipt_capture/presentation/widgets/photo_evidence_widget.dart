@@ -14,6 +14,7 @@ class PhotoEvidenceWidget extends StatelessWidget {
   final bool toReturn;
   final Function() onCameraClose;
   final Function() onNext;
+  final ValueChanged<ReceiptCaptureResult> onEvidenceReady;
   // Governs visual skin and upload/validation flow.
   final EvidenceCaptureType evidenceType;
   final bool enableOCR;
@@ -27,13 +28,16 @@ class PhotoEvidenceWidget extends StatelessWidget {
     required this.toReturn,
     required this.onCameraClose,
     required this.onNext,
+    required this.onEvidenceReady,
     this.evidenceType = EvidenceCaptureType.paymentVoucher,
     this.enableOCR = false,
     this.allowSaveLocally = true,
     this.isDev = false,
   }) : assert(
-         evidenceType == EvidenceCaptureType.paymentVoucher || !enableOCR,
-         'enableOCR solo aplica para evidenceType paymentVoucher',
+         !enableOCR ||
+             evidenceType == EvidenceCaptureType.paymentVoucher ||
+             evidenceType == EvidenceCaptureType.invoice,
+         'enableOCR solo aplica para evidenceType paymentVoucher o invoice',
        );
 
   @override
@@ -42,7 +46,7 @@ class PhotoEvidenceWidget extends StatelessWidget {
       create: (context) => PhotoEvidenceCubit(
         config: ReceiptCaptureConfig(evidenceType: evidenceType, enableOCR: enableOCR, maxPhotos: 1),
         mediaRepository: MediaPickerRepositoryImpl(),
-        captureUseCase: TakePhotoEvidence(enableOCR: true, imageOptimizer: ImageOptimizerRepositoryImpl()),
+        captureUseCase: TakePhotoEvidence(enableOCR: enableOCR, imageOptimizer: ImageOptimizerRepositoryImpl()),
       ),
       child: _EnhancedPhotoEvidenceView(
         orderId: orderId,
@@ -50,6 +54,7 @@ class PhotoEvidenceWidget extends StatelessWidget {
         toReturn: toReturn,
         onCameraClose: onCameraClose,
         onNext: onNext,
+        onEvidenceReady: onEvidenceReady,
         evidenceType: evidenceType,
         enableOCR: enableOCR,
         allowSaveLocally: allowSaveLocally,
@@ -66,6 +71,7 @@ class _EnhancedPhotoEvidenceView extends StatefulWidget {
   final bool toReturn;
   final Function() onCameraClose;
   final Function() onNext;
+  final ValueChanged<ReceiptCaptureResult> onEvidenceReady;
   final EvidenceCaptureType evidenceType;
   final bool enableOCR;
   final bool allowSaveLocally;
@@ -77,6 +83,7 @@ class _EnhancedPhotoEvidenceView extends StatefulWidget {
     required this.toReturn,
     required this.onCameraClose,
     required this.onNext,
+    required this.onEvidenceReady,
     required this.evidenceType,
     required this.enableOCR,
     required this.allowSaveLocally,
@@ -88,6 +95,8 @@ class _EnhancedPhotoEvidenceView extends StatefulWidget {
 }
 
 class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> with TickerProviderStateMixin {
+  static const Color _brandMint = Color(0xFF19E3CD);
+
   // Animaciones
   late AnimationController _pulseController;
   late AnimationController _slideController;
@@ -233,14 +242,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          // Dismiss cualquier loading activo al cambiar de estado
-        } else {
-          widget.onCameraClose();
-        }
-      },
+      canPop: true,
       child: MultiBlocListener(
         listeners: [
           BlocListener<PhotoEvidenceCubit, PhotoEvidenceState>(
@@ -392,7 +394,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
   Widget _buildCapturingContent() {
     return Column(
       children: [
-        _buildStatusIcon(icon: Icons.camera_alt_rounded, color: Colors.greenAccent, isAnimated: true),
+        _buildStatusIcon(icon: Icons.camera_alt_rounded, color: _brandMint, isAnimated: true),
         const SizedBox(height: 24),
         Text(
           _statusCapturingText,
@@ -418,7 +420,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
         const SizedBox(height: 20),
         LinearProgressIndicator(
           backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+          valueColor: AlwaysStoppedAnimation<Color>(_brandMint),
         ),
       ],
     );
@@ -459,7 +461,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
   Widget _buildLoadingContent(PhotoEvidenceLoading state) {
     return Column(
       children: [
-        _buildStatusIcon(icon: Icons.cloud_upload_rounded, color: Colors.greenAccent, isAnimated: true),
+        _buildStatusIcon(icon: Icons.cloud_upload_rounded, color: _brandMint, isAnimated: true),
         const SizedBox(height: 24),
         Text(
           state.message,
@@ -468,7 +470,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
         const SizedBox(height: 20),
         LinearProgressIndicator(
           backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+          valueColor: AlwaysStoppedAnimation<Color>(_brandMint),
         ),
       ],
     );
@@ -481,11 +483,11 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
 
     return Column(
       children: [
-        // Botón principal - Enviar
+        // Botón principal - Continuar
         _buildPrimaryButton(
           icon: Icons.cloud_upload_rounded,
-          text: 'Enviar Evidencia',
-          onPressed: () => _sendEvidence(context),
+          text: 'Continuar',
+          onPressed: () => _continueWithEvidence(state),
           isPrimary: true,
         ),
 
@@ -539,11 +541,11 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
           width: 120,
           height: 120,
           decoration: BoxDecoration(
-            color: Colors.greenAccent.withValues(alpha: 0.1),
+            color: _brandMint.withValues(alpha: 0.1),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.3), width: 2),
+            border: Border.all(color: _brandMint.withValues(alpha: 0.3), width: 2),
           ),
-          child: Icon(_capturePromptIcon, size: 60, color: Colors.greenAccent),
+          child: Icon(_capturePromptIcon, size: 60, color: _brandMint),
         ),
         const SizedBox(height: 24),
         Text(
@@ -599,10 +601,10 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
         icon: Icon(icon, size: 24),
         label: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary ? Colors.greenAccent : Colors.grey.shade100,
+          backgroundColor: isPrimary ? _brandMint : Colors.grey.shade100,
           foregroundColor: isPrimary ? Colors.white : Colors.black87,
           elevation: isPrimary ? 4 : 0,
-          shadowColor: isPrimary ? Colors.greenAccent.withValues(alpha: 0.3) : null,
+          shadowColor: isPrimary ? _brandMint.withValues(alpha: 0.3) : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: isPrimary ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
@@ -737,7 +739,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
                 height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: index == state.currentPhotoIndex ? Colors.greenAccent : Colors.grey.shade300,
+                  color: index == state.currentPhotoIndex ? _brandMint : Colors.grey.shade300,
                 ),
               ),
             ),
@@ -748,16 +750,15 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
   }
 
   // Métodos de acción
-  Future<void> _sendEvidence(BuildContext context) async {
-    final success = await context.read<PhotoEvidenceCubit>().sendData();
-
-    if (success) {
-      widget.onNext();
-    }
+  void _continueWithEvidence(PhotoEvidenceSuccess state) {
+    if (!state.hasPhotos) return;
+    final selected = state.captureResults[state.currentPhotoIndex];
+    widget.onEvidenceReady(selected);
   }
 
   Future<void> _saveLocally(BuildContext context) async {
     final success = await context.read<PhotoEvidenceCubit>().saveLocally();
+    if (!context.mounted) return;
 
     if (success) {
       final state = context.read<PhotoEvidenceCubit>().state;
@@ -775,6 +776,12 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
   }
 
   void _showSnackbar(String message, {required bool isError}) {
-    // Mostrar un snackbar con el mensaje
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : _brandMint,
+      ),
+    );
   }
 }
