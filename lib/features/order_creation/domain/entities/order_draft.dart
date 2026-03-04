@@ -1,5 +1,4 @@
 import 'package:armi_hub/features/order_creation/domain/entities/create_order_request.dart';
-import 'package:armi_hub/features/order_creation/domain/entities/payment_method_option.dart';
 
 class OrderDraft {
   const OrderDraft({
@@ -21,7 +20,7 @@ class OrderDraft {
   });
 
   final double totalValue;
-  final int paymentMethod;
+  final int? paymentMethod;
   final String firstName;
   final String lastName;
   final String address;
@@ -38,6 +37,7 @@ class OrderDraft {
 
   bool get isValid {
     return totalValue > 0 &&
+        paymentMethod != null &&
         firstName.trim().isNotEmpty &&
         lastName.trim().isNotEmpty &&
         address.trim().isNotEmpty &&
@@ -48,6 +48,7 @@ class OrderDraft {
 
   String? get validationError {
     if (totalValue <= 0) return 'El total debe ser mayor a 0.';
+    if (paymentMethod == null) return 'Debes seleccionar un metodo de pago.';
     if (firstName.trim().isEmpty) return 'El nombre es obligatorio.';
     if (lastName.trim().isEmpty) return 'El apellido es obligatorio.';
     if (address.trim().isEmpty) return 'La direccion es obligatoria.';
@@ -65,7 +66,7 @@ class OrderDraft {
 
     return CreateOrderRequest(
       totalValue: totalValue,
-      paymentMethod: paymentMethod,
+      paymentMethod: paymentMethod!,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       address: address.trim(),
@@ -80,6 +81,7 @@ class OrderDraft {
   OrderDraft copyWith({
     double? totalValue,
     int? paymentMethod,
+    bool clearPaymentMethod = false,
     String? firstName,
     String? lastName,
     String? address,
@@ -100,7 +102,7 @@ class OrderDraft {
   }) {
     return OrderDraft(
       totalValue: totalValue ?? this.totalValue,
-      paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentMethod: clearPaymentMethod ? null : (paymentMethod ?? this.paymentMethod),
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       address: address ?? this.address,
@@ -120,7 +122,7 @@ class OrderDraft {
   static OrderDraft empty({required int businessId, required String storeId}) {
     return OrderDraft(
       totalValue: 0,
-      paymentMethod: PaymentMethodCatalog.defaultCode,
+      paymentMethod: null,
       firstName: '',
       lastName: '',
       address: '',

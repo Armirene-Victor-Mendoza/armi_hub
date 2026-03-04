@@ -150,7 +150,7 @@ class _AppRoot extends StatelessWidget {
 
             return HomeScreen(
               contextData: businessContext,
-              showOrderActions: true, //dependencies.featureFlagsService.isOrderCreationEnabled,
+              showOrderActions: dependencies.featureFlagsService.isOrderCreationEnabled,
               onScanPressed: () => _openCaptureFlow(context, businessContext),
               onHistoryPressed: () => _openHistory(context),
               onEditContextPressed: () => _openContextEditor(context, businessContext),

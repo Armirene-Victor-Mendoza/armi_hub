@@ -1,541 +1,449 @@
 import 'package:armi_hub/features/receipt_capture/domain/domain.dart';
-import 'package:intl/intl.dart';
 
 class PosReceiptParser implements IReceiptParser {
+  static const int _paymentCash = 1;
+  static const int _paymentCard = 2;
+  static const int _paymentOnline = 3;
+
   @override
   ReceiptProcessingResult parse(String rawText) {
     final warnings = <String>[];
-
     final normalized = _normalizeText(rawText);
     final lines = _splitLines(normalized);
-    final colonFields = _extractColonFields(lines);
 
-    final Map<String, dynamic> extraFields = {};
+    final totalValue = _extractTotalValue(lines);
+    final payment = _extractPayment(lines);
+    final customerName = _extractCustomerName(lines);
+    final customerAddress = _extractAddress(lines);
+    final customerPhone = _extractPhone(lines);
+    final receiptDateTime = _extractReceiptDateTime(lines);
+    final orderCentralId = _extractOrderCentralId(normalized);
+    final platformOrderId = _extractPlatformOrderId(normalized);
 
-    void putExtra(String key, dynamic value) {
-      if (value == null) return;
-      if (value is String && value.trim().isEmpty) return;
-      if (!extraFields.containsKey(key)) {
-        extraFields[key] = value;
-      }
+    if (totalValue == null) {
+      warnings.add('No se pudo detectar TOTAL del recibo.');
+    }
+    if (payment.code == null) {
+      warnings.add('No se pudo detectar metodo de pago.');
+    }
+    if (customerName.raw == null) {
+      warnings.add('No se pudo detectar CLIENTE.');
+    }
+    if (customerAddress == null) {
+      warnings.add('No se pudo detectar DIRECCION.');
+    }
+    if (customerPhone == null) {
+      warnings.add('No se pudo detectar CELULAR.');
     }
 
-    // -------- campos tipados principales --------
+    final hasMainFields =
+        totalValue != null ||
+        payment.code != null ||
+        customerName.firstName != null ||
+        customerAddress != null ||
+        customerPhone != null;
 
-    final fechaHora = _parseDateTime(lines);
-    if (fechaHora == null) {
-      warnings.add('No se pudo detectar la fecha/hora del recibo.');
+    if (!hasMainFields) {
+      return ReceiptProcessingResult.error(
+        'No se pudo reconocer informacion suficiente del recibo para crear la orden.',
+      );
     }
 
-    final monto = _parseAmount(lines, labels: ['MONTO', 'VALOR']);
-    final total = _parseAmount(lines, labels: ['TOTAL']);
-    if (monto == null && total == null) {
-      warnings.add('No se pudo detectar el monto ni el total del recibo.');
-    }
+    final optionalExtra = <String, String?>{
+      'payment_method_label_raw': payment.labelRaw,
+      'order_central_id': orderCentralId,
+      'platform_order_id': platformOrderId,
+    }..removeWhere((_, value) => value == null || value.trim().isEmpty);
 
-    final card = _parseCard(lines);
-    if (card.brand == null) {
-      warnings.add('No se pudo detectar la marca/tipo de la tarjeta.');
-    }
-    if (card.last4 == null) {
-      warnings.add('No se pudieron detectar los últimos 4 dígitos de la tarjeta.');
-    }
+    final extra = optionalExtra.map((key, value) => MapEntry(key, value!));
 
-    final cu = _extractFirstMatch(normalized, RegExp(r'\bCU[: ]+([0-9A-Z]+)'));
-    if (cu == null) {
-      warnings.add('No se pudo detectar el CU.');
-    }
-
-    final terminal = _extractFirstMatch(normalized, RegExp(r'\bTER[: ]+([A-Z0-9]+)'));
-    if (terminal == null) {
-      warnings.add('No se pudo detectar la terminal (TER).');
-    }
-
-    final lote = _extractFirstMatch(normalized, RegExp(r'\bLOTE[: ]+([A-Z0-9]+)'));
-    // lote puede ser opcional, depende de qué tan exigente quieras ser
-
-    final ver = _extractFirstMatch(normalized, RegExp(r'\bVER[: ]+([A-Z0-9_]+)'));
-    if (ver == null) {
-      warnings.add('No se pudo detectar el VER.');
-    }
-
-    final autorizacion = _parseAutorizacion(normalized, lines);
-    if (autorizacion == null) {
-      warnings.add('No se pudo detectar el número de autorización.');
-    }
-
-    final referencia = _parseReferencia(normalized, lines);
-    if (referencia == null) {
-      warnings.add('No se pudo detectar la referencia / recibo / RRN.');
-    }
-
-    final orderId = _parseOrderId(normalized);
-    if (orderId == null) {
-      warnings.add('No se pudo detectar el ID de orden.');
-    }
-
-    final tienda = _guessTienda(lines);
-    if (tienda == null) {
-      warnings.add('No se pudo detectar con certeza la tienda/comercio.');
-    }
-
-    final afiliado = _guessAfiliado(lines, tienda);
-    if (afiliado == null) {
-      warnings.add('No se pudo detectar el afiliado.');
-    }
-
-    // -------- label:valor → extraFields --------
-
-    for (final f in colonFields) {
-      final key = _canonicalKeyForLabel(f.rawLabel);
-
-      if (key == 'monto' || key == 'total' || key == 'compraNeta') {
-        final numValue = _tryParseAmount(f.value);
-        putExtra(key, numValue ?? f.value);
-      } else {
-        putExtra(key, f.value);
-      }
-    }
-
-    // -------- construir ReceiptData --------
-
-    final receiptData = ReceiptData(
-      rawText: rawText,
-      afiliado: afiliado,
-      terminal: terminal,
-      lote: lote,
-      referencia: referencia,
-      tarjeta: card.brand,
-      ultimos4: card.last4,
-      fechaHora: fechaHora,
-      monto: monto,
-      total: total ?? monto, // si no hay Total, usamos Monto/Valor
-      cu: cu,
-      ver: ver,
-      tienda: tienda,
-      autorizacion: autorizacion,
-      orderId: orderId,
-      extra: {
-        /* Lines 125-126 omitted */
-        ...extraFields,
-      },
+    return ReceiptProcessingResult.success(
+      ReceiptData(
+        rawText: rawText,
+        totalValue: totalValue,
+        paymentMethodCode: payment.code,
+        paymentMethodLabelRaw: payment.labelRaw,
+        customerNameRaw: customerName.raw,
+        customerFirstName: customerName.firstName,
+        customerLastName: customerName.lastName,
+        customerAddress: customerAddress,
+        customerPhone: customerPhone,
+        receiptDateTime: receiptDateTime,
+        orderCentralId: orderCentralId,
+        platformOrderId: platformOrderId,
+        extra: extra,
+      ),
+      warnings: warnings,
     );
-
-    // -------- decidir success vs error --------
-
-    final coreFieldsDetected = [
-      fechaHora,
-      monto ?? total,
-      referencia,
-      autorizacion,
-      card.brand,
-      card.last4,
-      orderId,
-    ].where((v) => v != null).length;
-
-    if (coreFieldsDetected == 0) {
-      // aquí puedes ajustar el texto de error a algo más de negocio tuyo
-      return ReceiptProcessingResult.error('No se pudo reconocer información suficiente para considerar válido el recibo.');
-    }
-
-    return ReceiptProcessingResult.success(receiptData, warnings: warnings);
   }
-  // --------- Normalización básica ---------
 
   String _normalizeText(String input) {
-    var text = input.replaceAll('\r', '\n');
-    text = text.replaceAll('\t', ' ');
-    text = text.toUpperCase();
+    var text = input.replaceAll('\r', '\n').replaceAll('\t', ' ').toUpperCase();
 
-    const from = 'ÁÉÍÓÚÄËÏÖÜÑ';
-    const to = 'AEIOUAEIOUN';
-    for (var i = 0; i < from.length; i++) {
-      text = text.replaceAll(from[i], to[i]);
+    const accented = 'ÁÉÍÓÚÄËÏÖÜÑ';
+    const plain = 'AEIOUAEIOUN';
+    for (var i = 0; i < accented.length; i++) {
+      text = text.replaceAll(accented[i], plain[i]);
     }
 
-    // colapsar espacios múltiples
-    text = text.replaceAll(RegExp(r' +'), ' ');
+    final replacements = <RegExp, String>{
+      RegExp(r'\bTOTAI\b'): 'TOTAL',
+      RegExp(r'\bCLIENIE\b'): 'CLIENTE',
+      RegExp(r'\bCLLENTE\b'): 'CLIENTE',
+      RegExp(r'\bCL1ENTE\b'): 'CLIENTE',
+      RegExp(r'\bDIRECC1ON\b'): 'DIRECCION',
+      RegExp(r'\bDIRECCION\b'): 'DIRECCION',
+      RegExp(r'\bCEL\.\b'): 'CEL',
+    };
+
+    for (final entry in replacements.entries) {
+      text = text.replaceAll(entry.key, entry.value);
+    }
 
     return text;
   }
 
   List<String> _splitLines(String text) {
-    return text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    return text
+        .split('\n')
+        .map((line) => line.replaceAll(RegExp(r' +'), ' ').trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
   }
 
-  // --------- Fecha / Fecha-hora ---------
+  double? _extractTotalValue(List<String> lines) {
+    for (var index = 0; index < lines.length; index++) {
+      final line = lines[index];
+      if (!line.contains('TOTAL')) continue;
 
-  DateTime? _parseDateTime(List<String> lines) {
-    final joined = lines.join(' ');
+      final amount = _extractAmountFromLine(line, relaxed: true);
+      if (amount != null) return amount;
 
-    // formato: 04/12/2024 18:25
-    final fullMatch = RegExp(r'(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\s+(\d{1,2}):(\d{2})').firstMatch(joined);
-
-    if (fullMatch != null) {
-      final d = int.parse(fullMatch.group(1)!);
-      final m = int.parse(fullMatch.group(2)!);
-      final yRaw = int.parse(fullMatch.group(3)!);
-      final h = int.parse(fullMatch.group(4)!);
-      final min = int.parse(fullMatch.group(5)!);
-
-      final y = yRaw < 100 ? 2000 + yRaw : yRaw;
-      return DateTime(y, m, d, h, min);
+      // En OCR de tickets el monto puede quedar en la línea siguiente.
+      for (var lookAhead = index + 1; lookAhead < lines.length && lookAhead <= index + 3; lookAhead++) {
+        final nextLine = lines[lookAhead];
+        if (nextLine.contains('CLIENTE') || nextLine.contains('DIRECCI')) {
+          break;
+        }
+        final nearbyAmount = _extractAmountFromLine(nextLine, relaxed: true);
+        if (nearbyAmount != null && nearbyAmount > 0) {
+          return nearbyAmount;
+        }
+      }
     }
 
-    // fallback: fecha sola o hora sola
     for (final line in lines) {
-      // 04/12/2024
-      if (RegExp(r'^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$').hasMatch(line)) {
-        try {
-          final df = DateFormat('dd/MM/yyyy');
-          return df.parse(line);
-        } catch (_) {}
-      }
-      // 18:25
-      final timeOnly = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(line);
-      if (timeOnly != null) {
-        final now = DateTime.now();
-        final h = int.parse(timeOnly.group(1)!);
-        final min = int.parse(timeOnly.group(2)!);
-        return DateTime(now.year, now.month, now.day, h, min);
-      }
+      if (_detectPaymentCode(line) == null) continue;
+      final amount = _extractAmountFromLine(line, relaxed: true);
+      if (amount != null) return amount;
     }
 
+    return _extractFromFirstDollar(lines);
+  }
+
+  _PaymentDetection _extractPayment(List<String> lines) {
+    for (final line in lines) {
+      final code = _detectPaymentCode(line);
+      if (code == null) continue;
+
+      final labelRaw = _detectPaymentLabel(line);
+      return _PaymentDetection(code: code, labelRaw: labelRaw);
+    }
+
+    return const _PaymentDetection();
+  }
+
+  int? _detectPaymentCode(String line) {
+    final compact = _compact(line);
+    if (compact.contains('TRANSACCIONENLINEA') || compact.contains('ONLINE') || compact.contains('PSE')) {
+      return _paymentOnline;
+    }
+    if (compact.contains('EFECTIVO')) {
+      return _paymentCash;
+    }
+    if (compact.contains('TARJETADEBITO') ||
+        compact.contains('TARJETACREDITO') ||
+        compact.contains('DATAFONO') ||
+        compact.contains('TARJETA')) {
+      return _paymentCard;
+    }
     return null;
   }
 
-  // --------- Montos (Monto / Total) ---------
-
-  double? _parseAmount(List<String> lines, {required List<String> labels}) {
-    for (final line in lines) {
-      final upper = line.toUpperCase();
-      final hasLabel = labels.any((l) => upper.contains(l));
-      if (!hasLabel) continue;
-
-      // Ej: "TOTAL: $36.200" o "VALOR:$194.843"
-      final match = RegExp(r'([\$\sCOP]*)([\d\.\,]+)').firstMatch(line);
-      if (match != null) {
-        final numberPart = match.group(2)!;
-        final normalized = numberPart.replaceAll('.', '').replaceAll(',', '.').trim();
-        try {
-          return double.parse(normalized);
-        } catch (_) {}
-      }
-    }
+  String? _detectPaymentLabel(String line) {
+    final compact = _compact(line);
+    if (compact.contains('TRANSACCIONENLINEA')) return 'TRANSACCION EN LINEA';
+    if (compact.contains('ONLINE')) return 'ONLINE';
+    if (compact.contains('PSE')) return 'PSE';
+    if (compact.contains('EFECTIVO')) return 'EFECTIVO';
+    if (compact.contains('TARJETADEBITO')) return 'TARJETA DEBITO';
+    if (compact.contains('TARJETACREDITO')) return 'TARJETA CREDITO';
+    if (compact.contains('DATAFONO')) return 'DATAFONO';
+    if (compact.contains('TARJETA')) return 'TARJETA';
     return null;
   }
 
-  // --------- Tarjeta / últimos 4 dígitos ---------
+  _CustomerName _extractCustomerName(List<String> lines) {
+    final customerIndex = lines.indexWhere((line) => line.contains('CLIENTE'));
+    if (customerIndex == -1) return const _CustomerName();
 
-  _Card _parseCard(List<String> lines) {
-    // Ej: "DB-MASTERCARD ***3633" o "DB-MASTERCARD 3533"
-    final regex = RegExp(r'\b(DB|CR)[-\s]*([A-Z]+)\s+\*{0,3}\s?(\d{3,4})');
+    String rawName = _extractAfterLabel(lines[customerIndex], RegExp(r'CLIENTE'));
+
+    if (rawName.isEmpty &&
+        customerIndex + 1 < lines.length &&
+        !_isAddressStopLine(lines[customerIndex + 1])) {
+      rawName = lines[customerIndex + 1];
+    }
+
+    if (rawName.isEmpty) {
+      return const _CustomerName();
+    }
+
+    final tokens = rawName.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (tokens.isEmpty) {
+      return const _CustomerName();
+    }
+
+    final firstName = tokens.first;
+    final lastName = tokens.length > 1 ? tokens.sublist(1).join(' ') : '';
+
+    return _CustomerName(raw: rawName, firstName: firstName, lastName: lastName);
+  }
+
+  String? _extractAddress(List<String> lines) {
+    final startIndex = lines.indexWhere((line) => _looksLikeAddressStart(line));
+    if (startIndex == -1) return null;
+
+    final chunks = <String>[];
+    final firstChunk = _extractAfterLabel(lines[startIndex], RegExp(r'DIREC+I*ON?|DIRECCI'));
+    if (firstChunk.isNotEmpty) {
+      chunks.add(firstChunk);
+    }
+
+    for (var i = startIndex + 1; i < lines.length; i++) {
+      final line = lines[i];
+      if (_isAddressStopLine(line)) break;
+      chunks.add(line);
+    }
+
+    if (chunks.isEmpty) return null;
+
+    final merged = chunks.join(' ').replaceAll(RegExp(r' +'), ' ').trim();
+    return merged.isEmpty ? null : merged;
+  }
+
+  bool _looksLikeAddressStart(String line) {
+    return line.contains('DIRECCION') || line.contains('DIRECCI');
+  }
+
+  bool _isAddressStopLine(String line) {
+    return line.startsWith('TEL') ||
+        line.startsWith('TEL-EXT') ||
+        line.startsWith('CEL') ||
+        line.startsWith('HORA ENTREGA') ||
+        line.startsWith('HORA DE ENTREGA') ||
+        line.startsWith('PEDIDO CENTRAL') ||
+        line.startsWith('DOMICILIO NO') ||
+        line.startsWith('PEDIDO PLATAFORMA') ||
+        line.startsWith('NIT');
+  }
+
+  String? _extractPhone(List<String> lines) {
+    final regex = RegExp(r'\bCEL(?:ULAR)?\b\s*[:\-]?\s*([+0-9][0-9\s\-]{6,})');
 
     for (final line in lines) {
       final match = regex.firstMatch(line);
-      if (match != null) {
-        final tipo = match.group(1)!; // DB, CR
-        final marca = match.group(2)!; // MASTERCARD, VISA
-        final last4 = match.group(3)!;
-        return _Card(brand: '$tipo-$marca', last4: last4);
-      }
+      if (match == null) continue;
+      final normalized = _normalizePhone(match.group(1)!);
+      if (normalized != null) return normalized;
     }
 
-    // Fallback: sólo "MASTERCARD 3633"
-    final simple = RegExp(r'(MASTERCARD|VISA|AMEX)\s+(\d{4})');
+    return null;
+  }
+
+  String? _normalizePhone(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+
+    if (trimmed.startsWith('+')) {
+      final digits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.length < 7) return null;
+      return '+$digits';
+    }
+
+    final digitsOnly = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.length < 7) return null;
+    return digitsOnly;
+  }
+
+  DateTime? _extractReceiptDateTime(List<String> lines) {
+    DateTime? date;
+
     for (final line in lines) {
-      final match = simple.firstMatch(line);
-      if (match != null) {
-        return _Card(brand: match.group(1), last4: match.group(2));
-      }
+      if (!line.contains('FECHA')) continue;
+
+      final dateMatch = RegExp(r'(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})').firstMatch(line);
+      if (dateMatch == null) continue;
+
+      final day = int.parse(dateMatch.group(1)!);
+      final month = int.parse(dateMatch.group(2)!);
+      final yearRaw = int.parse(dateMatch.group(3)!);
+      final year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
+
+      date = DateTime(year, month, day);
+      break;
     }
 
-    return const _Card();
+    if (date == null) return null;
+
+    DateTime? withTime;
+    for (final line in lines) {
+      if (!line.contains('HORA DE LLEGADA')) continue;
+      withTime = _combineDateAndTime(date, line);
+      if (withTime != null) return withTime;
+    }
+
+    for (final line in lines) {
+      final candidate = _combineDateAndTime(date, line);
+      if (candidate != null) return candidate;
+    }
+
+    return date;
   }
 
-  // --------- Referencia ---------
-  // (usa primero RECIBO:/REFERENCIA:, si no, RRN)
+  DateTime? _combineDateAndTime(DateTime date, String source) {
+    final timeMatch = RegExp(r'(\d{1,2}):(\d{2})(?::(\d{2}))?').firstMatch(source);
+    if (timeMatch == null) return null;
 
-  String? _parseReferencia(String normalized, List<String> lines) {
-    // RECIBO: 000561
-    final recMatch = RegExp(r'\bRECIBO[: ]+([0-9A-Z]+)').firstMatch(normalized);
-    if (recMatch != null) {
-      return recMatch.group(1);
-    }
+    final hour = int.parse(timeMatch.group(1)!);
+    final minute = int.parse(timeMatch.group(2)!);
+    final second = int.tryParse(timeMatch.group(3) ?? '0') ?? 0;
 
-    // REFERENCIA: XXXXX
-    final refMatch = RegExp(r'\bREFERENCIA[: ]+([0-9A-Z]+)').firstMatch(normalized);
-    if (refMatch != null) {
-      return refMatch.group(1);
-    }
-
-    // RRN: 084200297452
-    final rrnMatch = RegExp(r'\bRRN[: ]*([0-9]{6,})').firstMatch(normalized);
-    if (rrnMatch != null) {
-      return rrnMatch.group(1);
-    }
-
-    return null;
+    return DateTime(date.year, date.month, date.day, hour, minute, second);
   }
 
-  // --------- ID de orden ---------
-  String? _parseOrderId(String normalized) {
-    // Patrón: "ID de orden: 103669750" (basado en las imágenes de ejemplo)
-    final orderIdRegex = RegExp(r'\bID\s+DE\s+ORDEN[:\s]+([0-9]+)');
-    final match = orderIdRegex.firstMatch(normalized);
-    if (match != null) {
-      return match.group(1);
-    }
-    return null;
-  }
-
-  // --------- # de autorización ---------
-  // Soporta:
-  // - "CU: ... TER: ... AUT182524"
-  // - "NUMERO DE APROBACION:\n233316"
-
-  String? _parseAutorizacion(String normalized, List<String> lines) {
-    // 1. Caso clásico "AUT182524" o "AUT: 182524"
-    final autRegex = RegExp(r'\bAUT[: ]*([0-9A-Z]{4,})');
-    final autMatch = autRegex.firstMatch(normalized);
-    if (autMatch != null) {
-      return autMatch.group(1);
-    }
-
-    // 2. Caso "NUMERO DE APROBACION:" en una línea y el número en la siguiente
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      if (line.contains('NUMERO DE APROBACION')) {
-        // buscamos en las siguientes líneas el primer número "grande"
-        for (int j = i + 1; j < lines.length; j++) {
-          final nextLine = lines[j];
-          // si ya llegamos a VALOR / TOTAL, dejamos de buscar
-          if (nextLine.contains('VALOR') || nextLine.contains('TOTAL')) {
-            break;
-          }
-          final digitsMatch = RegExp(r'\b(\d{4,})\b').firstMatch(nextLine);
-          if (digitsMatch != null) {
-            return digitsMatch.group(1);
-          }
-        }
-      }
-    }
-
-    return null;
-  }
-
-  // --------- Tienda / Afiliado ---------
-
-  String? _guessTienda(List<String> lines) {
-    // 1) Comercios conocidos por nombre (puedes ir ampliando la lista)
-    final knownMerchant = lines.firstWhere(
-      (l) => l.contains('FARMATODO') || l.contains('EXITO') || l.contains('OLIMPICA') || l.contains('ARA'),
-      orElse: () => '',
+  String? _extractOrderCentralId(String text) {
+    return _firstGroup(
+      text,
+      RegExp(r'PEDIDO\s+CENTRAL\s*[:#]?\s*([0-9]{4,})'),
     );
-    if (knownMerchant.isNotEmpty) return knownMerchant;
+  }
 
-    // 2) Heurística: línea siguiente a CREDIBANCO/REDEBAN, pero
-    // solo si no parece etiqueta genérica.
-    final procIndex = lines.indexWhere((l) => l.contains('CREDIBANCO') || l.contains('EDIBANCO') || l.contains('REDEBAN'));
-    if (procIndex != -1 && procIndex + 1 < lines.length) {
-      final candidate = lines[procIndex + 1];
+  String? _extractPlatformOrderId(String text) {
+    return _firstGroup(
+      text,
+      RegExp(r'PEDIDO\s+PLATAFORMA\s*#?\s*[: ]\s*([0-9]{4,})'),
+    );
+  }
 
-      final looksLikeLabel =
-          candidate.contains('VENTA') ||
-          candidate.contains('NUMERO DE APROBACION') ||
-          candidate.contains('VALOR') ||
-          candidate.contains('RECIBO');
-
-      if (!_looksLikeMonto(candidate) && !_looksLikeFecha(candidate) && !looksLikeLabel) {
-        return candidate;
-      }
+  String _extractAfterLabel(String line, RegExp labelPattern) {
+    final colonIndex = line.indexOf(':');
+    if (colonIndex >= 0 && colonIndex + 1 < line.length) {
+      return line.substring(colonIndex + 1).trim();
     }
 
-    // 3) Si no estamos razonablemente seguros, mejor NO inventar tienda.
-    return null;
+    final withoutLabel = line.replaceFirst(labelPattern, '').trim();
+    return withoutLabel.replaceFirst(RegExp(r'^[-#\s]+'), '').trim();
   }
 
-  String? _guessAfiliado(List<String> lines, String? tienda) {
-    // Si el slip trae AFILIADO: xxx, úsalo
-    final match = RegExp(r'\bAFILIADO[: ]+(.+)');
-    for (final line in lines) {
-      final m = match.firstMatch(line);
-      if (m != null) {
-        return m.group(1)!.trim();
-      }
-    }
-
-    // Si no hay AFILIADO explícito, no asumimos nada.
-    return null;
-  }
-
-  bool _looksLikeMonto(String line) {
-    return line.contains('\$') || RegExp(r'\b\d{1,3}(\.\d{3})+\b').hasMatch(line);
-  }
-
-  bool _looksLikeFecha(String line) {
-    return RegExp(r'\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}').hasMatch(line);
-  }
-
-  // --------- Helper genérico regex ---------
-
-  String? _extractFirstMatch(String text, RegExp regex) {
-    final match = regex.firstMatch(text);
-    return match?.group(1);
-  }
-
-  // --------- Extracción genérica de "label: valor" ---------
-
-  List<RawField> _extractColonFields(List<String> lines) {
-    final fields = <RawField>[];
-
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final tokens = line.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
-
-      for (int ti = 0; ti < tokens.length; ti++) {
-        final token = tokens[ti];
-        final colonIdx = token.indexOf(':');
-        if (colonIdx == -1) continue;
-
-        // ⛔ si es hora (18:25), lo ignoramos como campo
-        if (_isTimeToken(token)) continue;
-
-        // 1) Etiqueta (puede ser multi-palabra)
-        int startLabelIdx = ti;
-        while (startLabelIdx > 0) {
-          final prev = tokens[startLabelIdx - 1];
-          if (prev.contains(':')) break;
-          if (_isLikelyValueToken(prev)) break;
-          startLabelIdx--;
-        }
-
-        final labelTokens = tokens.sublist(startLabelIdx, ti + 1);
-        final last = labelTokens.last;
-        final cleanLast = last.substring(0, colonIdx);
-        labelTokens[labelTokens.length - 1] = cleanLast;
-
-        final rawLabel = labelTokens.join(' ').trim();
-
-        // 2) Valor
-        String firstValuePart = '';
-        if (colonIdx + 1 < token.length) {
-          firstValuePart = token.substring(colonIdx + 1);
-        }
-
-        final valueTokens = <String>[];
-        if (firstValuePart.isNotEmpty) {
-          valueTokens.add(firstValuePart);
-        }
-
-        int j = ti + 1;
-        while (j < tokens.length && !tokens[j].contains(':')) {
-          valueTokens.add(tokens[j]);
-          j++;
-        }
-
-        var value = valueTokens.join(' ').trim();
-
-        // Caso "NUMERO DE APROBACION:\n233316"
-        if (value.isEmpty && i + 1 < lines.length) {
-          final nextLine = lines[i + 1].trim();
-          if (nextLine.isNotEmpty && !nextLine.contains(':')) {
-            value = nextLine;
-          }
-        }
-
-        if (rawLabel.isNotEmpty && value.isNotEmpty) {
-          fields.add(RawField(rawLabel: rawLabel, value: value));
-        }
-      }
-    }
-
-    return fields;
-  }
-
-  bool _isTimeToken(String token) {
-    return RegExp(r'^\d{1,2}:\d{2}$').hasMatch(token);
-  }
-
-  bool _isLikelyValueToken(String token) {
-    // Números puros o con decimal
-    if (RegExp(r'^\d+([.,]\d+)?$').hasMatch(token)) return true;
-    // Algo que empieza en dígito o en "$"
-    if (RegExp(r'^\$?\d').hasMatch(token)) return true;
-    return false;
-  }
-
-  // --------- Normalización de etiquetas a claves JSON ---------
-
-  String _canonicalKeyForLabel(String rawLabel) {
-    var s = rawLabel.toUpperCase();
-    s = s.replaceAll(RegExp(r'[^A-Z0-9 ]'), '').trim();
-
-    switch (s) {
-      case 'NUMERO DE APROBACION':
-      case 'NUMERO APROBACION':
-        return 'autorizacion';
-      case 'VALOR':
-        return 'monto';
-      case 'TOTAL':
-        return 'total';
-      case 'RECIBO':
-        return 'referencia';
-      case 'COMPRA NETA':
-        return 'compraNeta';
-      case 'CU':
-        return 'cu';
-      case 'TER':
-        return 'terminal';
-      case 'LOTE':
-        return 'lote';
-      case 'AID':
-        return 'aid';
-      case 'VER':
-        return 'ver';
-      case 'TVR':
-        return 'tvr';
-      case 'RRN':
-        return 'rrn';
-      case 'TSI':
-        return 'tsi';
-      case 'CR':
-        return 'cr';
-      default:
-        final parts = s.split(RegExp(r'\s+'));
-        if (parts.isEmpty) return s.toLowerCase();
-        final first = parts.first.toLowerCase();
-        final rest = parts.skip(1).map((p) => p[0] + p.substring(1).toLowerCase()).join();
-        return '$first$rest';
-    }
-  }
-
-  // --------- Parseo suave de montos ---------
-
-  double? _tryParseAmount(String value) {
-    final match = RegExp(r'([\$\sCOP]*)([\d\.\,]+)').firstMatch(value);
-    if (match == null) return null;
-    final numberPart = match.group(2)!;
-    final normalized = numberPart.replaceAll('.', '').replaceAll(',', '.').trim();
-    try {
-      return double.parse(normalized);
-    } catch (_) {
+  double? _extractAmountFromLine(String line, {bool relaxed = false}) {
+    final hasCurrencyHint = RegExp(r'[$S]\s*\d').hasMatch(line);
+    if (!relaxed && !hasCurrencyHint) {
       return null;
     }
+
+    final matches = RegExp(r'[$S]?\s*\d[\d\.,]*').allMatches(line).toList();
+    if (matches.isEmpty) return null;
+
+    final last = matches.last.group(0);
+    if (last == null) return null;
+
+    final parsed = _toDouble(last);
+    if (parsed == null) return null;
+
+    // Evita tomar IDs/lotes muy grandes como monto.
+    if (parsed > 50000000) return null;
+    return parsed;
+  }
+
+  double? _extractFromFirstDollar(List<String> lines) {
+    for (final line in lines) {
+      final markerIndex = _firstCurrencyMarkerIndex(line);
+      if (markerIndex == -1) continue;
+
+      final right = line.substring(markerIndex + 1);
+      final match = RegExp(r'(\d[\d\.,]*)').firstMatch(right);
+      if (match == null) continue;
+
+      final parsed = _toDouble(match.group(1)!);
+      if (parsed == null) continue;
+      if (parsed <= 0) continue;
+      if (parsed > 50000000) continue;
+
+      return parsed;
+    }
+
+    return null;
+  }
+
+  int _firstCurrencyMarkerIndex(String line) {
+    final match = RegExp(r'[$S](?=\s*\d)').firstMatch(line);
+    if (match == null) return -1;
+    return match.start;
+  }
+
+  double? _toDouble(String value) {
+    var cleaned = value.replaceAll(RegExp(r'[^0-9,\.]'), '');
+    if (cleaned.isEmpty) return null;
+
+    final hasDot = cleaned.contains('.');
+    final hasComma = cleaned.contains(',');
+
+    if (hasDot && hasComma) {
+      final dot = cleaned.lastIndexOf('.');
+      final comma = cleaned.lastIndexOf(',');
+      final decimalIndex = dot > comma ? dot : comma;
+      final decimals = cleaned.length - decimalIndex - 1;
+
+      if (decimals >= 1 && decimals <= 2) {
+        final separator = cleaned[decimalIndex];
+        cleaned = cleaned.replaceAll(separator == '.' ? ',' : '.', '');
+        cleaned = cleaned.replaceFirst(separator, '.');
+      } else {
+        cleaned = cleaned.replaceAll('.', '').replaceAll(',', '');
+      }
+    } else if (hasComma) {
+      final decimals = cleaned.length - cleaned.lastIndexOf(',') - 1;
+      cleaned = decimals >= 1 && decimals <= 2 ? cleaned.replaceAll(',', '.') : cleaned.replaceAll(',', '');
+    } else if (hasDot) {
+      final decimals = cleaned.length - cleaned.lastIndexOf('.') - 1;
+      cleaned = decimals >= 1 && decimals <= 2 ? cleaned : cleaned.replaceAll('.', '');
+    }
+
+    return double.tryParse(cleaned);
+  }
+
+  String _compact(String line) {
+    return line.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  }
+
+  String? _firstGroup(String source, RegExp regex) {
+    final match = regex.firstMatch(source);
+    return match?.group(1);
   }
 }
 
-class _Card {
-  final String? brand;
-  final String? last4;
+class _PaymentDetection {
+  const _PaymentDetection({this.code, this.labelRaw});
 
-  const _Card({this.brand, this.last4});
+  final int? code;
+  final String? labelRaw;
 }
 
-/// Campo crudo extraído como "etiqueta: valor"
-class RawField {
-  final String rawLabel; // ej: "NUMERO DE APROBACION", "CU", "COMPRA NETA"
-  final String value; // ej: "233316", "818443488", "$36.200"
+class _CustomerName {
+  const _CustomerName({this.raw, this.firstName, this.lastName});
 
-  RawField({required this.rawLabel, required this.value});
+  final String? raw;
+  final String? firstName;
+  final String? lastName;
 }

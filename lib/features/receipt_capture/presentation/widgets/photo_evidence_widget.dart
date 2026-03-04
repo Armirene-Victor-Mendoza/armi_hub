@@ -34,9 +34,7 @@ class PhotoEvidenceWidget extends StatelessWidget {
     this.allowSaveLocally = true,
     this.isDev = false,
   }) : assert(
-         !enableOCR ||
-             evidenceType == EvidenceCaptureType.paymentVoucher ||
-             evidenceType == EvidenceCaptureType.invoice,
+         !enableOCR || evidenceType == EvidenceCaptureType.paymentVoucher || evidenceType == EvidenceCaptureType.invoice,
          'enableOCR solo aplica para evidenceType paymentVoucher o invoice',
        );
 
@@ -109,11 +107,11 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
   String get _headerTitle {
     switch (widget.evidenceType) {
       case EvidenceCaptureType.invoice:
-        return 'Evidencia de factura';
+        return 'Captura de factura';
       case EvidenceCaptureType.paymentVoucher:
-        return 'Evidencia de pago';
+        return 'Captura de recibo';
       case EvidenceCaptureType.deliveryProof:
-        return 'Evidencia de entrega';
+        return 'Captura de evidencia de entrega';
     }
   }
 
@@ -387,6 +385,13 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
           onPressed: () => context.read<PhotoEvidenceCubit>().capturePhoto(),
           isPrimary: true,
         ),
+        const SizedBox(height: 12),
+        _buildPrimaryButton(
+          icon: Icons.upload_file_rounded,
+          text: 'Subir imagen',
+          onPressed: () => _showImportSourceSheet(context),
+          isPrimary: false,
+        ),
       ],
     );
   }
@@ -418,10 +423,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
         const SizedBox(height: 12),
         Text('Optimizando calidad de imagen', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
         const SizedBox(height: 20),
-        LinearProgressIndicator(
-          backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation<Color>(_brandMint),
-        ),
+        LinearProgressIndicator(backgroundColor: Colors.grey.shade200, valueColor: AlwaysStoppedAnimation<Color>(_brandMint)),
       ],
     );
   }
@@ -454,6 +456,13 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
           },
           isPrimary: false,
         ),
+        const SizedBox(height: 12),
+        _buildPrimaryButton(
+          icon: Icons.upload_file_rounded,
+          text: 'Subir imagen',
+          onPressed: () => _showImportSourceSheet(context),
+          isPrimary: false,
+        ),
       ],
     );
   }
@@ -468,10 +477,7 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
         ),
         const SizedBox(height: 20),
-        LinearProgressIndicator(
-          backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation<Color>(_brandMint),
-        ),
+        LinearProgressIndicator(backgroundColor: Colors.grey.shade200, valueColor: AlwaysStoppedAnimation<Color>(_brandMint)),
       ],
     );
   }
@@ -777,11 +783,47 @@ class _EnhancedPhotoEvidenceViewState extends State<_EnhancedPhotoEvidenceView> 
 
   void _showSnackbar(String message, {required bool isError}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : _brandMint,
-      ),
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: isError ? Colors.red : _brandMint));
+  }
+
+  Future<void> _showImportSourceSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const ListTile(
+                  title: Text('Subir imagen', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('Elige desde galeria o archivos'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_rounded),
+                  title: const Text('Galeria'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.read<PhotoEvidenceCubit>().pickImageFromGallery();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.folder_open_rounded),
+                  title: const Text('Archivos'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.read<PhotoEvidenceCubit>().pickImageFromFiles();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -48,7 +48,7 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
   late final TextEditingController _addressController;
   late final TextEditingController _phoneController;
 
-  int _paymentMethod = PaymentMethodCatalog.defaultCode;
+  int? _paymentMethod;
   bool _controllersSeeded = false;
 
   @override
@@ -175,15 +175,22 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
-                            key: ValueKey<int>(_paymentMethod),
+                            key: ValueKey<int?>(_paymentMethod),
                             initialValue: _paymentMethod,
                             decoration: const InputDecoration(labelText: 'Metodo de pago'),
+                            hint: const Text('Selecciona metodo de pago'),
                             items: PaymentMethodCatalog.options
                                 .map(
                                   (option) =>
                                       DropdownMenuItem<int>(value: option.code, child: Text('${option.code} - ${option.name}')),
                                 )
                                 .toList(),
+                            validator: (value) {
+                              if (value == null) {
+                                return 'Selecciona un metodo de pago';
+                              }
+                              return null;
+                            },
                             onChanged: state.isSubmitting
                                 ? null
                                 : (value) {
@@ -235,28 +242,33 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                     Text(state.errorMessage!, style: const TextStyle(color: Colors.red)),
                   ],
                   const SizedBox(height: 14),
-                  ElevatedButton.icon(
-                    onPressed: state.isSubmitting
-                        ? null
-                        : () {
-                            if (!_formKey.currentState!.validate()) return;
+                  Builder(
+                    builder: (context) {
+                      final canSubmit = !state.isSubmitting && _paymentMethod != null;
+                      return ElevatedButton.icon(
+                        onPressed: !canSubmit
+                            ? null
+                            : () {
+                                if (!_formKey.currentState!.validate()) return;
 
-                            final total = double.parse(_totalController.text.replaceAll(',', '.'));
-                            final payload = draft.copyWith(
-                              totalValue: total,
-                              paymentMethod: _paymentMethod,
-                              firstName: _firstNameController.text,
-                              lastName: _lastNameController.text,
-                              address: _addressController.text,
-                              phone: _phoneController.text,
-                            );
+                                final total = double.parse(_totalController.text.replaceAll(',', '.'));
+                                final payload = draft.copyWith(
+                                  totalValue: total,
+                                  paymentMethod: _paymentMethod,
+                                  firstName: _firstNameController.text,
+                                  lastName: _lastNameController.text,
+                                  address: _addressController.text,
+                                  phone: _phoneController.text,
+                                );
 
-                            context.read<ReviewOrderCubit>().submit(payload);
-                          },
-                    icon: state.isSubmitting
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.cloud_upload_rounded),
-                    label: Text(state.isSubmitting ? 'Enviando...' : 'Confirmar y crear orden'),
+                                context.read<ReviewOrderCubit>().submit(payload);
+                              },
+                        icon: state.isSubmitting
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.cloud_upload_rounded),
+                        label: Text(state.isSubmitting ? 'Enviando...' : 'Confirmar y crear orden'),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -271,11 +283,22 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
     if (_controllersSeeded) return;
     _controllersSeeded = true;
     _paymentMethod = draft.paymentMethod;
-    _totalController.text = draft.totalValue > 0 ? draft.totalValue.toStringAsFixed(2) : '';
+    _totalController.text = _formatTotalForInput(draft.totalValue);
     _firstNameController.text = draft.firstName;
     _lastNameController.text = draft.lastName;
     _addressController.text = draft.address;
     _phoneController.text = draft.phone;
+  }
+
+  String _formatTotalForInput(double totalValue) {
+    if (totalValue <= 0) return '';
+
+    if (totalValue == totalValue.truncateToDouble()) {
+      return totalValue.toInt().toString();
+    }
+
+    final withPrecision = totalValue.toStringAsFixed(6);
+    return withPrecision.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
   }
 
   String? _requiredValidator(String? value) {

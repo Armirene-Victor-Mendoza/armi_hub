@@ -53,4 +53,26 @@ void main() {
 
     expect(draft.toCreateOrderRequest, throwsStateError);
   });
+
+  test('order draft fails validation when payment method is null', () {
+    const draft = OrderDraft(
+      totalValue: 120.5,
+      paymentMethod: null,
+      firstName: 'Juan',
+      lastName: 'Perez',
+      address: 'Av. Principal 123',
+      phone: '58412551511',
+      businessId: 45,
+      storeId: '0001',
+      city: 'BARRANQUILLA',
+      receiptImagePath: '/tmp/receipt.jpg',
+      ocrRawText: 'TOTAL 120.5',
+      ocrTotal: 120.5,
+      uploadedImageUrl: 'https://storage.googleapis.com/bucket/receipt.jpg',
+    );
+
+    expect(draft.isValid, isFalse);
+    expect(draft.validationError, 'Debes seleccionar un metodo de pago.');
+    expect(draft.toCreateOrderRequest, throwsStateError);
+  });
 }

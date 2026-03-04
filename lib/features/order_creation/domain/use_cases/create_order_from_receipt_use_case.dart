@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:armi_hub/features/app_context/domain/entities/business_context.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/order_draft.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
-import 'package:armi_hub/features/order_creation/domain/entities/payment_method_option.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/scanned_order.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/upload_image_result.dart';
 import 'package:armi_hub/features/order_creation/domain/repositories/orders_repository.dart';
@@ -18,18 +17,18 @@ class CreateOrderFromReceiptUseCase {
 
   OrderDraft buildInitialDraft({required ReceiptCaptureResult captureResult, required BusinessContext context}) {
     final receiptData = captureResult.receiptData;
-    final detectedTotal = receiptData?.total ?? receiptData?.monto;
+    final detectedTotal = receiptData?.totalValue;
     final preferredUploadPath = captureResult.optimizedImagePath.isNotEmpty
         ? captureResult.optimizedImagePath
         : captureResult.imagePath;
 
     return OrderDraft(
       totalValue: detectedTotal ?? 0,
-      paymentMethod: PaymentMethodCatalog.defaultCode,
-      firstName: '',
-      lastName: '',
-      address: '',
-      phone: '',
+      paymentMethod: receiptData?.paymentMethodCode,
+      firstName: receiptData?.customerFirstName ?? '',
+      lastName: receiptData?.customerLastName ?? '',
+      address: receiptData?.customerAddress ?? '',
+      phone: receiptData?.customerPhone ?? '',
       businessId: context.businessId,
       storeId: context.storeId,
       businessName: context.businessName,
@@ -76,7 +75,7 @@ class CreateOrderFromReceiptUseCase {
       businessName: normalizedDraft.businessName,
       storeName: normalizedDraft.storeName,
       totalValue: normalizedDraft.totalValue,
-      paymentMethod: normalizedDraft.paymentMethod,
+      paymentMethod: normalizedDraft.paymentMethod!,
       firstName: normalizedDraft.firstName,
       lastName: normalizedDraft.lastName,
       address: normalizedDraft.address,
@@ -136,7 +135,7 @@ class CreateOrderFromReceiptUseCase {
       businessName: draft.businessName,
       storeName: draft.storeName,
       totalValue: draft.totalValue,
-      paymentMethod: draft.paymentMethod,
+      paymentMethod: draft.paymentMethod!,
       firstName: draft.firstName,
       lastName: draft.lastName,
       address: draft.address,

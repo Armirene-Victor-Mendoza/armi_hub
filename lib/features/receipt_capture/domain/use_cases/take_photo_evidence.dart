@@ -44,7 +44,15 @@ class TakePhotoEvidence {
         return ReceiptCaptureResult.error(error: 'No se pudo capturar la imagen');
       }
 
-      // Verificar que el archivo existe
+      return processImagePath(imagePath);
+    } catch (e) {
+      return ReceiptCaptureResult.error(error: 'Error capturando imagen: $e');
+    }
+  }
+
+  /// Procesa una imagen existente (galería/archivos) con el mismo pipeline de cámara.
+  Future<ReceiptCaptureResult> processImagePath(String imagePath) async {
+    try {
       final file = File(imagePath);
       if (!await file.exists()) {
         return ReceiptCaptureResult.error(error: 'El archivo de imagen no existe');
@@ -52,34 +60,30 @@ class TakePhotoEvidence {
 
       late final String optimizedImagePath;
       try {
-        // Optimizar la imagen para upload
         final optimizedFile = await _imageOptimizer.optimizeForUpload(file);
         optimizedImagePath = optimizedFile.path;
-      } catch (e) {
-        // Si la optimización falla, usar la imagen original
+      } catch (_) {
         optimizedImagePath = imagePath;
       }
-      // Paso 2: Procesar con OCR si está habilitado desde constructor
+
       if (_enableOCR && _processReceiptUseCase != null) {
         try {
           final ocrResult = await _processReceiptUseCase.processReceiptFromFile(imagePath);
 
           if (ocrResult.success && ocrResult.receiptData != null) {
-            // OCR exitoso
             return ReceiptCaptureResult.success(
               imagePath: imagePath,
               optimizedImagePath: optimizedImagePath,
               receiptData: ocrResult.receiptData,
               warnings: ocrResult.warnings,
             );
-          } else {
-            // OCR falló, pero continúa con solo la imagen (transparente para el usuario)
-            return ReceiptCaptureResult.success(
-              imagePath: imagePath,
-              optimizedImagePath: optimizedImagePath,
-              warnings: ['OCR no pudo procesar la imagen'],
-            );
           }
+
+          return ReceiptCaptureResult.success(
+            imagePath: imagePath,
+            optimizedImagePath: optimizedImagePath,
+            warnings: ['OCR no pudo procesar la imagen'],
+          );
         } catch (e) {
           return ReceiptCaptureResult.success(
             imagePath: imagePath,
@@ -87,12 +91,11 @@ class TakePhotoEvidence {
             warnings: ['Error procesando OCR: $e'],
           );
         }
-      } else {
-        // OCR deshabilitado, solo retornar imagen
-        return ReceiptCaptureResult.success(imagePath: imagePath, optimizedImagePath: optimizedImagePath);
       }
+
+      return ReceiptCaptureResult.success(imagePath: imagePath, optimizedImagePath: optimizedImagePath);
     } catch (e) {
-      return ReceiptCaptureResult.error(error: 'Error capturando imagen: $e');
+      return ReceiptCaptureResult.error(error: 'Error procesando imagen: $e');
     }
   }
 }

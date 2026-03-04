@@ -62,6 +62,50 @@ class PhotoEvidenceCubit extends Cubit<PhotoEvidenceState> {
     }
   }
 
+  /// Selecciona una imagen desde galería y la procesa (optimización + OCR).
+  Future<void> pickImageFromGallery() async {
+    final existingResults = _existingResults();
+
+    try {
+      final selection = await _mediaRepository.pickFromGallery(
+        const MediaPickerConfig(type: MediaType.image, allowMultiple: false),
+      );
+
+      final imagePath = selection?.firstPath;
+      if (imagePath == null || imagePath.isEmpty) {
+        return;
+      }
+
+      await _processImportedImage(imagePath: imagePath, existingResults: existingResults);
+    } catch (e) {
+      emit(PhotoEvidenceError(message: 'Error seleccionando imagen desde galeria: $e', captureResults: existingResults));
+    }
+  }
+
+  /// Selecciona una imagen desde archivos y la procesa (optimización + OCR).
+  Future<void> pickImageFromFiles() async {
+    final existingResults = _existingResults();
+
+    try {
+      final selection = await _mediaRepository.pickFiles(
+        const MediaPickerConfig(
+          type: MediaType.image,
+          allowMultiple: false,
+          allowedExtensions: <String>['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'bmp', 'gif', 'tif', 'tiff'],
+        ),
+      );
+
+      final imagePath = selection?.firstPath;
+      if (imagePath == null || imagePath.isEmpty) {
+        return;
+      }
+
+      await _processImportedImage(imagePath: imagePath, existingResults: existingResults);
+    } catch (e) {
+      emit(PhotoEvidenceError(message: 'Error seleccionando imagen desde archivos: $e', captureResults: existingResults));
+    }
+  }
+
   /// Elimina una foto por índice
   void removePhoto(int index) {
     if (state is! PhotoEvidenceSuccess) return;
@@ -225,6 +269,47 @@ class PhotoEvidenceCubit extends Cubit<PhotoEvidenceState> {
     }
 
     return _lazyUseCase!;
+  }
+
+  Future<void> _processImportedImage({
+    required String imagePath,
+    required List<ReceiptCaptureResult> existingResults,
+  }) async {
+    emit(const PhotoEvidenceProcessing());
+
+    try {
+      final useCase = await _getOrCreateUseCase();
+      final result = await useCase.processImagePath(imagePath);
+
+      if (result.success && result.hasImages) {
+        final allResults = [...existingResults, result];
+        HapticFeedback.lightImpact();
+        emit(
+          PhotoEvidenceSuccess(
+            captureResults: allResults,
+            currentPhotoIndex: allResults.length - 1,
+          ),
+        );
+      } else {
+        emit(PhotoEvidenceError(message: result.error ?? 'Error desconocido procesando imagen', captureResults: existingResults));
+      }
+    } catch (e) {
+      emit(PhotoEvidenceError(message: 'Error procesando imagen: $e', captureResults: existingResults));
+    }
+  }
+
+  List<ReceiptCaptureResult> _existingResults() {
+    if (state is PhotoEvidenceSuccess) {
+      return (state as PhotoEvidenceSuccess).captureResults;
+    }
+    if (state is PhotoEvidenceError) {
+      return (state as PhotoEvidenceError).captureResults;
+    }
+    if (state is PhotoEvidenceLoading) {
+      return (state as PhotoEvidenceLoading).captureResults;
+    }
+
+    return <ReceiptCaptureResult>[];
   }
 
   @override

@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:armi_hub/core/network/network.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/upload_image_result.dart';
-import 'package:mime/mime.dart';
 
 class ImageUploadRemoteDataSource {
   const ImageUploadRemoteDataSource({required ApiClient apiClient}) : _apiClient = apiClient;
