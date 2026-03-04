@@ -12,11 +12,7 @@ class OrdersRemoteDataSource {
       final response = await _apiClient.postJson('/integracion/customer-terceros/signature', request.toJson());
 
       if (response.isSuccess) {
-        return CreateOrderResult(
-          success: true,
-          statusCode: response.statusCode,
-          responseBodyRaw: response.bodyRaw,
-        );
+        return CreateOrderResult(success: true, statusCode: response.statusCode, responseBodyRaw: response.bodyRaw);
       }
 
       return CreateOrderResult(
@@ -26,12 +22,7 @@ class OrdersRemoteDataSource {
         errorMessage: 'El backend respondio con codigo ${response.statusCode}.',
       );
     } on ApiException catch (error) {
-      return CreateOrderResult(
-        success: false,
-        statusCode: null,
-        responseBodyRaw: '',
-        errorMessage: error.message,
-      );
+      return CreateOrderResult(success: false, statusCode: null, responseBodyRaw: '', errorMessage: error.message);
     } catch (error) {
       return CreateOrderResult(
         success: false,

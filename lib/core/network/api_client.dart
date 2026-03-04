@@ -83,6 +83,32 @@ class ApiClient {
     }
   }
 
+  Future<ApiResponse> postMultipartAbsoluteUrl(
+    String url, {
+    required String fileFieldName,
+    required String filePath,
+    Duration timeout = const Duration(seconds: 20),
+    Map<String, String> extraHeaders = const <String, String>{},
+  }) async {
+    final uri = Uri.parse(url);
+
+    try {
+      final request = http.MultipartRequest('POST', uri);
+      request.followRedirects = true;
+      request.headers.addAll(extraHeaders);
+      request.files.add(await http.MultipartFile.fromPath(fileFieldName, filePath));
+
+      final streamedResponse = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(streamedResponse).timeout(timeout);
+
+      return ApiResponse(statusCode: response.statusCode, bodyRaw: response.body);
+    } on TimeoutException {
+      throw const ApiException('La solicitud excedio el tiempo de espera.');
+    } catch (error) {
+      throw ApiException('Error de red enviando solicitud multipart: $error');
+    }
+  }
+
   void close() {
     _client.close();
   }

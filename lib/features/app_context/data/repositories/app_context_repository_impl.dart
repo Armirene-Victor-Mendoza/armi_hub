@@ -7,6 +7,7 @@ class AppContextRepositoryImpl implements AppContextRepository {
   static const String _storeIdKey = 'store_id';
   static const String _businessNameKey = 'business_name';
   static const String _storeNameKey = 'store_name';
+  static const String _storeCityKey = 'store_city';
 
   @override
   Future<void> saveBusinessContext(BusinessContext context) async {
@@ -23,6 +24,11 @@ class AppContextRepositoryImpl implements AppContextRepository {
     } else {
       await prefs.remove(_storeNameKey);
     }
+    if (context.storeCity != null) {
+      await prefs.setString(_storeCityKey, context.storeCity!);
+    } else {
+      await prefs.remove(_storeCityKey);
+    }
   }
 
   @override
@@ -33,6 +39,7 @@ class AppContextRepositoryImpl implements AppContextRepository {
     final storeId = prefs.getString(_storeIdKey);
     final businessName = prefs.getString(_businessNameKey);
     final storeName = prefs.getString(_storeNameKey);
+    final storeCity = prefs.getString(_storeCityKey);
 
     if (businessId == null || storeId == null || storeId.trim().isEmpty) {
       return null;
@@ -43,6 +50,7 @@ class AppContextRepositoryImpl implements AppContextRepository {
       storeId: storeId,
       businessName: businessName,
       storeName: storeName,
+      storeCity: storeCity,
     );
   }
 
@@ -53,5 +61,6 @@ class AppContextRepositoryImpl implements AppContextRepository {
     await prefs.remove(_storeIdKey);
     await prefs.remove(_businessNameKey);
     await prefs.remove(_storeNameKey);
+    await prefs.remove(_storeCityKey);
   }
 }

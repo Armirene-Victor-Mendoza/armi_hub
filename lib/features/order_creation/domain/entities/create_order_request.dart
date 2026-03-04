@@ -8,6 +8,8 @@ class CreateOrderRequest {
     required this.phone,
     required this.businessId,
     required this.storeId,
+    required this.city,
+    required this.urlImage,
   });
 
   final double totalValue;
@@ -18,6 +20,8 @@ class CreateOrderRequest {
   final String phone;
   final int businessId;
   final String storeId;
+  final String city;
+  final String urlImage;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -29,6 +33,8 @@ class CreateOrderRequest {
       'phone': phone,
       'business_id': businessId,
       'store_id': storeId,
+      'city': city,
+      'url_image': urlImage,
     };
   }
 }

@@ -11,9 +11,13 @@ class OrderDraft {
     required this.phone,
     required this.businessId,
     required this.storeId,
+    this.businessName,
+    this.storeName,
+    required this.city,
     required this.receiptImagePath,
     required this.ocrRawText,
     this.ocrTotal,
+    this.uploadedImageUrl,
   });
 
   final double totalValue;
@@ -24,9 +28,13 @@ class OrderDraft {
   final String phone;
   final int businessId;
   final String storeId;
+  final String? businessName;
+  final String? storeName;
+  final String city;
   final String receiptImagePath;
   final String ocrRawText;
   final double? ocrTotal;
+  final String? uploadedImageUrl;
 
   bool get isValid {
     return totalValue > 0 &&
@@ -50,6 +58,11 @@ class OrderDraft {
   }
 
   CreateOrderRequest toCreateOrderRequest() {
+    final urlImage = uploadedImageUrl?.trim() ?? '';
+    if (urlImage.isEmpty) {
+      throw StateError('url_image es obligatorio para crear la orden.');
+    }
+
     return CreateOrderRequest(
       totalValue: totalValue,
       paymentMethod: paymentMethod,
@@ -59,6 +72,8 @@ class OrderDraft {
       phone: phone.trim(),
       businessId: businessId,
       storeId: storeId.trim(),
+      city: city.trim(),
+      urlImage: urlImage,
     );
   }
 
@@ -71,9 +86,16 @@ class OrderDraft {
     String? phone,
     int? businessId,
     String? storeId,
+    String? businessName,
+    bool clearBusinessName = false,
+    String? storeName,
+    bool clearStoreName = false,
+    String? city,
     String? receiptImagePath,
     String? ocrRawText,
     double? ocrTotal,
+    String? uploadedImageUrl,
+    bool clearUploadedImageUrl = false,
     bool clearOcrTotal = false,
   }) {
     return OrderDraft(
@@ -85,9 +107,13 @@ class OrderDraft {
       phone: phone ?? this.phone,
       businessId: businessId ?? this.businessId,
       storeId: storeId ?? this.storeId,
+      businessName: clearBusinessName ? null : (businessName ?? this.businessName),
+      storeName: clearStoreName ? null : (storeName ?? this.storeName),
+      city: city ?? this.city,
       receiptImagePath: receiptImagePath ?? this.receiptImagePath,
       ocrRawText: ocrRawText ?? this.ocrRawText,
       ocrTotal: clearOcrTotal ? null : (ocrTotal ?? this.ocrTotal),
+      uploadedImageUrl: clearUploadedImageUrl ? null : (uploadedImageUrl ?? this.uploadedImageUrl),
     );
   }
 
@@ -101,8 +127,12 @@ class OrderDraft {
       phone: '',
       businessId: businessId,
       storeId: storeId,
+      businessName: null,
+      storeName: null,
+      city: '',
       receiptImagePath: '',
       ocrRawText: '',
+      uploadedImageUrl: null,
     );
   }
 }

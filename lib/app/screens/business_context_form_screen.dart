@@ -35,6 +35,10 @@ class _BusinessContextFormScreenState extends State<BusinessContextFormScreen> {
   List<BranchOffice> _branches = <BranchOffice>[];
   int? _selectedBranchId;
 
+  String _normalizeCityName(String rawCity) {
+    return rawCity.split('-').first.trim();
+  }
+
   BranchOffice? get _selectedBranch {
     if (_selectedBranchId == null) return null;
     for (final branch in _branches) {
@@ -215,7 +219,7 @@ class _BusinessContextFormScreenState extends State<BusinessContextFormScreen> {
                 children: <Widget>[
                   Text(selectedBranch.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  Text('Ciudad: ${selectedBranch.city}'),
+                  Text('Ciudad: ${_normalizeCityName(selectedBranch.city)}'),
                   Text('Estado: ${selectedBranch.state}'),
                   Text('Direccion: ${selectedBranch.address}'),
                 ],
@@ -240,6 +244,7 @@ class _BusinessContextFormScreenState extends State<BusinessContextFormScreen> {
                       storeId: branch.storeId,
                       businessName: _kokoricoName,
                       storeName: branch.name,
+                      storeCity: _normalizeCityName(branch.city),
                     );
 
                     try {

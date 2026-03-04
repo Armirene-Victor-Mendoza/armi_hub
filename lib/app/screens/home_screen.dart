@@ -6,12 +6,14 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     required this.contextData,
+    required this.showOrderActions,
     required this.onScanPressed,
     required this.onHistoryPressed,
     required this.onEditContextPressed,
   });
 
   final BusinessContext contextData;
+  final bool showOrderActions;
   final VoidCallback onScanPressed;
   final VoidCallback onHistoryPressed;
   final VoidCallback onEditContextPressed;
@@ -107,25 +109,33 @@ class HomeScreen extends StatelessWidget {
                   color: BrandColors.card,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: Column(
-                  children: <Widget>[
-                    _MenuTile(
-                      icon: Icons.document_scanner_rounded,
-                      title: 'Escanear factura',
-                      subtitle: 'Captura recibo y crea orden',
-                      color: BrandColors.mint,
-                      onTap: onScanPressed,
-                    ),
-                    const Divider(height: 1),
-                    _MenuTile(
-                      icon: Icons.history_rounded,
-                      title: 'Historial de ordenes',
-                      subtitle: 'Consulta envios y reintentos',
-                      color: const Color(0xFF78B8FF),
-                      onTap: onHistoryPressed,
-                    ),
-                  ],
-                ),
+                child: showOrderActions
+                    ? Column(
+                        children: <Widget>[
+                          _MenuTile(
+                            icon: Icons.document_scanner_rounded,
+                            title: 'Escanear factura',
+                            subtitle: 'Captura recibo y crea orden',
+                            color: BrandColors.mint,
+                            onTap: onScanPressed,
+                          ),
+                          const Divider(height: 1),
+                          _MenuTile(
+                            icon: Icons.history_rounded,
+                            title: 'Historial de ordenes',
+                            subtitle: 'Consulta envios y reintentos',
+                            color: const Color(0xFF78B8FF),
+                            onTap: onHistoryPressed,
+                          ),
+                        ],
+                      )
+                    : const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'La creacion de ordenes esta deshabilitada por configuracion.',
+                          style: TextStyle(color: Color(0xFF5C6570), fontWeight: FontWeight.w600),
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 14),

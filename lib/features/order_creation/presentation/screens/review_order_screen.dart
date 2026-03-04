@@ -13,12 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class ReviewOrderScreen extends StatelessWidget {
-  const ReviewOrderScreen({
-    super.key,
-    required this.captureResult,
-    required this.contextData,
-    required this.createOrderUseCase,
-  });
+  const ReviewOrderScreen({super.key, required this.captureResult, required this.contextData, required this.createOrderUseCase});
 
   final ReceiptCaptureResult captureResult;
   final BusinessContext contextData;
@@ -27,8 +22,9 @@ class ReviewOrderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<ReviewOrderCubit>(
-      create: (_) => ReviewOrderCubit(createOrderUseCase: createOrderUseCase)
-        ..initialize(captureResult: captureResult, context: contextData),
+      create: (_) =>
+          ReviewOrderCubit(createOrderUseCase: createOrderUseCase)
+            ..initialize(captureResult: captureResult, context: contextData),
       child: _ReviewOrderView(contextData: contextData),
     );
   }
@@ -125,10 +121,7 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                 children: <Widget>[
                   Container(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: BrandColors.topGradient,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+                    decoration: BoxDecoration(gradient: BrandColors.topGradient, borderRadius: BorderRadius.circular(18)),
                     child: const Text(
                       'Verifica los datos antes de crear la orden.',
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
@@ -137,41 +130,25 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                   const SizedBox(height: 12),
                   if (draft.receiptImagePath.isNotEmpty)
                     Container(
-                      decoration: BoxDecoration(
-                        color: BrandColors.card,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+                      decoration: BoxDecoration(color: BrandColors.card, borderRadius: BorderRadius.circular(18)),
                       padding: const EdgeInsets.all(8),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          File(draft.receiptImagePath),
-                          height: 180,
-                          fit: BoxFit.cover,
-                        ),
+                        child: Image.file(File(draft.receiptImagePath), height: 180, fit: BoxFit.cover),
                       ),
                     ),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: BrandColors.card,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+                    decoration: BoxDecoration(color: BrandColors.card, borderRadius: BorderRadius.circular(18)),
                     child: Row(
                       children: <Widget>[
                         Expanded(
-                          child: _ReadonlyInfo(
-                            label: 'ID del comercio',
-                            value: widget.contextData.businessId.toString(),
-                          ),
+                          child: _ReadonlyInfo(label: 'ID del comercio', value: widget.contextData.businessId.toString()),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _ReadonlyInfo(
-                            label: 'ID de la tienda',
-                            value: widget.contextData.storeId,
-                          ),
+                          child: _ReadonlyInfo(label: 'ID de la tienda', value: widget.contextData.storeId),
                         ),
                       ],
                     ),
@@ -179,10 +156,7 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: BrandColors.card,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+                    decoration: BoxDecoration(color: BrandColors.card, borderRadius: BorderRadius.circular(18)),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -206,10 +180,8 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                             decoration: const InputDecoration(labelText: 'Metodo de pago'),
                             items: PaymentMethodCatalog.options
                                 .map(
-                                  (option) => DropdownMenuItem<int>(
-                                    value: option.code,
-                                    child: Text('${option.code} - ${option.name}'),
-                                  ),
+                                  (option) =>
+                                      DropdownMenuItem<int>(value: option.code, child: Text('${option.code} - ${option.name}')),
                                 )
                                 .toList(),
                             onChanged: state.isSubmitting
@@ -282,11 +254,7 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                             context.read<ReviewOrderCubit>().submit(payload);
                           },
                     icon: state.isSubmitting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.cloud_upload_rounded),
                     label: Text(state.isSubmitting ? 'Enviando...' : 'Confirmar y crear orden'),
                   ),
@@ -328,10 +296,7 @@ class _ReadonlyInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: BrandColors.mintSoft,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: BrandColors.mintSoft, borderRadius: BorderRadius.circular(12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

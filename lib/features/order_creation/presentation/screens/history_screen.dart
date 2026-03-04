@@ -1,11 +1,13 @@
 import 'package:armi_hub/core/theme/brand_colors.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/scanned_order.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/get_order_history_use_case.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/retry_failed_order_use_case.dart';
 import 'package:armi_hub/features/order_creation/presentation/cubit/history_cubit.dart';
 import 'package:armi_hub/features/order_creation/presentation/cubit/history_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({
@@ -31,6 +33,8 @@ class HistoryScreen extends StatelessWidget {
 
 class _HistoryView extends StatelessWidget {
   const _HistoryView();
+
+  static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
   Widget build(BuildContext context) {
@@ -69,17 +73,30 @@ class _HistoryView extends StatelessWidget {
                           children: <Widget>[
                             Expanded(
                               child: Text(
-                                'ID local: ${item.id}',
+                                item.storeName?.trim().isNotEmpty == true ? item.storeName!.trim() : 'Tienda ${item.storeId}',
                                 style: const TextStyle(fontWeight: FontWeight.w700),
                               ),
                             ),
                             _StatusChip(status: item.status),
                           ],
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_businessName(item)}  •  ID tienda ${item.storeId}',
+                          style: const TextStyle(color: Color(0xFF5C6570), fontSize: 13),
+                        ),
                         const SizedBox(height: 6),
-                        Text('Fecha: ${item.createdAt.toLocal()}'),
+                        Text(
+                          'Orden local ${item.id}',
+                          style: const TextStyle(color: Color(0xFF5C6570), fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Fecha: ${_dateFormat.format(item.createdAt.toLocal())}'),
                         Text('Total: ${item.totalValue.toStringAsFixed(2)}'),
-                        Text('Metodo: ${item.paymentMethodLabel}'),
+                        Text('Metodo de pago: ${item.paymentMethodLabel}'),
+                        const SizedBox(height: 8),
+                        Text('Cliente: ${_clientName(item)}'),
+                        Text('Direccion: ${_safeText(item.address)}'),
                         if (item.responseStatusCode != null) Text('HTTP: ${item.responseStatusCode}'),
                         if ((item.errorMessage ?? '').isNotEmpty)
                           Text(item.errorMessage!, style: const TextStyle(color: Colors.red)),
@@ -113,6 +130,24 @@ class _HistoryView extends StatelessWidget {
         },
       ),
     );
+  }
+
+  String _clientName(ScannedOrder item) {
+    final fullName = '${item.firstName} ${item.lastName}'.trim();
+    return fullName.isEmpty ? 'Sin cliente' : fullName;
+  }
+
+  String _businessName(ScannedOrder item) {
+    final trimmed = item.businessName?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+    return 'Comercio ${item.businessId}';
+  }
+
+  String _safeText(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? 'Sin direccion' : trimmed;
   }
 }
 

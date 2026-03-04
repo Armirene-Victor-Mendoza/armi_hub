@@ -5,6 +5,7 @@ import 'package:armi_hub/features/order_creation/domain/entities/order_draft.dar
 import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/payment_method_option.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/scanned_order.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/upload_image_result.dart';
 import 'package:armi_hub/features/order_creation/domain/repositories/orders_repository.dart';
 import 'package:armi_hub/features/receipt_capture/domain/entities/receipt_capture_result.dart';
 import 'package:uuid/uuid.dart';
@@ -18,6 +19,9 @@ class CreateOrderFromReceiptUseCase {
   OrderDraft buildInitialDraft({required ReceiptCaptureResult captureResult, required BusinessContext context}) {
     final receiptData = captureResult.receiptData;
     final detectedTotal = receiptData?.total ?? receiptData?.monto;
+    final preferredUploadPath = captureResult.optimizedImagePath.isNotEmpty
+        ? captureResult.optimizedImagePath
+        : captureResult.imagePath;
 
     return OrderDraft(
       totalValue: detectedTotal ?? 0,
@@ -28,9 +32,13 @@ class CreateOrderFromReceiptUseCase {
       phone: '',
       businessId: context.businessId,
       storeId: context.storeId,
-      receiptImagePath: captureResult.imagePath,
+      businessName: context.businessName,
+      storeName: context.storeName,
+      city: context.storeCity ?? '',
+      receiptImagePath: preferredUploadPath,
       ocrRawText: receiptData?.rawText ?? '',
       ocrTotal: detectedTotal,
+      uploadedImageUrl: null,
     );
   }
 
@@ -41,24 +49,44 @@ class CreateOrderFromReceiptUseCase {
     }
 
     final now = DateTime.now();
-    final request = draft.toCreateOrderRequest();
+    final orderId = existingOrderId ?? _uuid.v4();
+
+    final uploadResult = await _resolveUploadUrl(draft);
+    if (!uploadResult.success || (uploadResult.urlImage?.trim().isEmpty ?? true)) {
+      final failedAttempt = _buildUploadFailedOrder(orderId: orderId, now: now, draft: draft, uploadResult: uploadResult);
+
+      if (existingOrderId == null) {
+        await _ordersRepository.saveOrderAttempt(failedAttempt);
+      } else {
+        await _ordersRepository.updateOrderAttempt(failedAttempt);
+      }
+
+      throw Exception(uploadResult.errorMessage ?? 'No se pudo subir la imagen, intenta de nuevo.');
+    }
+
+    final normalizedDraft = draft.copyWith(uploadedImageUrl: uploadResult.urlImage);
+    final request = normalizedDraft.toCreateOrderRequest();
 
     final pending = ScannedOrder(
-      id: existingOrderId ?? _uuid.v4(),
+      id: orderId,
       createdAt: now,
       updatedAt: now,
-      businessId: draft.businessId,
-      storeId: draft.storeId,
-      totalValue: draft.totalValue,
-      paymentMethod: draft.paymentMethod,
-      firstName: draft.firstName,
-      lastName: draft.lastName,
-      address: draft.address,
-      phone: draft.phone,
-      ocrRawText: draft.ocrRawText,
-      ocrTotal: draft.ocrTotal,
-      receiptImagePath: draft.receiptImagePath,
+      businessId: normalizedDraft.businessId,
+      storeId: normalizedDraft.storeId,
+      businessName: normalizedDraft.businessName,
+      storeName: normalizedDraft.storeName,
+      totalValue: normalizedDraft.totalValue,
+      paymentMethod: normalizedDraft.paymentMethod,
+      firstName: normalizedDraft.firstName,
+      lastName: normalizedDraft.lastName,
+      address: normalizedDraft.address,
+      phone: normalizedDraft.phone,
+      city: normalizedDraft.city,
+      ocrRawText: normalizedDraft.ocrRawText,
+      ocrTotal: normalizedDraft.ocrTotal,
+      receiptImagePath: normalizedDraft.receiptImagePath,
       requestJson: jsonEncode(request.toJson()),
+      uploadedImageUrl: normalizedDraft.uploadedImageUrl,
       status: OrderSyncStatus.pending,
     );
 
@@ -82,5 +110,58 @@ class CreateOrderFromReceiptUseCase {
     await _ordersRepository.updateOrderAttempt(finalized);
 
     return finalized;
+  }
+
+  Future<UploadImageResult> _resolveUploadUrl(OrderDraft draft) async {
+    final cachedUrl = draft.uploadedImageUrl?.trim();
+    if (cachedUrl != null && cachedUrl.isNotEmpty) {
+      return UploadImageResult(success: true, statusCode: null, responseBodyRaw: '', urlImage: cachedUrl);
+    }
+
+    return _ordersRepository.uploadReceiptImage(imagePath: draft.receiptImagePath);
+  }
+
+  ScannedOrder _buildUploadFailedOrder({
+    required String orderId,
+    required DateTime now,
+    required OrderDraft draft,
+    required UploadImageResult uploadResult,
+  }) {
+    return ScannedOrder(
+      id: orderId,
+      createdAt: now,
+      updatedAt: now,
+      businessId: draft.businessId,
+      storeId: draft.storeId,
+      businessName: draft.businessName,
+      storeName: draft.storeName,
+      totalValue: draft.totalValue,
+      paymentMethod: draft.paymentMethod,
+      firstName: draft.firstName,
+      lastName: draft.lastName,
+      address: draft.address,
+      phone: draft.phone,
+      city: draft.city,
+      ocrRawText: draft.ocrRawText,
+      ocrTotal: draft.ocrTotal,
+      receiptImagePath: draft.receiptImagePath,
+      requestJson: jsonEncode(<String, dynamic>{
+        'total_value': draft.totalValue,
+        'payment_method': draft.paymentMethod,
+        'first_name': draft.firstName,
+        'last_name': draft.lastName,
+        'address': draft.address,
+        'phone': draft.phone,
+        'business_id': draft.businessId,
+        'store_id': draft.storeId,
+        'city': draft.city,
+        'url_image': draft.uploadedImageUrl ?? '',
+      }),
+      uploadedImageUrl: draft.uploadedImageUrl,
+      responseStatusCode: uploadResult.statusCode,
+      responseBodyRaw: uploadResult.responseBodyRaw,
+      status: OrderSyncStatus.error,
+      errorMessage: uploadResult.errorMessage ?? 'No se pudo subir la imagen, intenta de nuevo.',
+    );
   }
 }

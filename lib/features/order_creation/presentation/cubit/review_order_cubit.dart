@@ -31,7 +31,11 @@ class ReviewOrderCubit extends Cubit<ReviewOrderState> {
       final order = await _createOrderUseCase.submitOrder(draft);
       emit(state.copyWith(isSubmitting: false, submittedOrder: order, clearError: true));
     } catch (error) {
-      emit(state.copyWith(isSubmitting: false, errorMessage: error.toString()));
+      final rawMessage = error.toString().replaceFirst('Exception: ', '').trim();
+      final message = rawMessage.contains('subir la imagen')
+          ? 'No se pudo subir la imagen, intenta de nuevo.'
+          : rawMessage;
+      emit(state.copyWith(isSubmitting: false, errorMessage: message));
     }
   }
 }

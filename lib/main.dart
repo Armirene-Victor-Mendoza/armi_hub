@@ -1,6 +1,7 @@
 import 'package:armi_hub/app/screens/business_context_form_screen.dart';
 import 'package:armi_hub/app/screens/home_screen.dart';
 import 'package:armi_hub/app/screens/receipt_capture_screen.dart';
+import 'package:armi_hub/core/feature_flags/feature_flags_service.dart';
 import 'package:armi_hub/core/network/network.dart';
 import 'package:armi_hub/core/theme/brand_colors.dart';
 import 'package:armi_hub/features/app_context/data/repositories/app_context_repository_impl.dart';
@@ -11,6 +12,7 @@ import 'package:armi_hub/features/app_context/presentation/cubit/app_context_cub
 import 'package:armi_hub/features/app_context/presentation/cubit/app_context_state.dart';
 import 'package:armi_hub/features/order_creation/data/datasources/orders_local_data_source.dart';
 import 'package:armi_hub/features/order_creation/data/datasources/orders_remote_data_source.dart';
+import 'package:armi_hub/features/order_creation/data/datasources/image_upload_remote_data_source.dart';
 import 'package:armi_hub/features/order_creation/data/repositories/orders_repository_impl.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/create_order_from_receipt_use_case.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/get_order_history_use_case.dart';
@@ -51,10 +53,7 @@ class _ArmiHubAppState extends State<ArmiHubApp> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: BrandColors.mint,
-      brightness: Brightness.light,
-    ).copyWith(
+    final colorScheme = ColorScheme.fromSeed(seedColor: BrandColors.mint, brightness: Brightness.light).copyWith(
       primary: BrandColors.mint,
       secondary: BrandColors.dark,
       surface: BrandColors.card,
@@ -70,11 +69,7 @@ class _ArmiHubAppState extends State<ArmiHubApp> {
         theme: ThemeData(
           colorScheme: colorScheme,
           scaffoldBackgroundColor: BrandColors.bg,
-          cardTheme: const CardThemeData(
-            color: BrandColors.card,
-            elevation: 0,
-            margin: EdgeInsets.zero,
-          ),
+          cardTheme: const CardThemeData(color: BrandColors.card, elevation: 0, margin: EdgeInsets.zero),
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: const Color(0xFFF8FAFC),
@@ -134,9 +129,7 @@ class _AppRoot extends StatelessWidget {
     return BlocBuilder<AppContextCubit, AppContextState>(
       builder: (context, state) {
         if (state.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
 
         final businessContext = state.context;
@@ -144,17 +137,25 @@ class _AppRoot extends StatelessWidget {
           return BusinessContextFormScreen(
             popOnSave: false,
             onSave: (payload) => context.read<AppContextCubit>().save(payload),
-            loadBranchOffices: (businessId) => dependencies.branchOfficeRepository.getBranchOffices(
-              businessId: businessId,
-            ),
+            loadBranchOffices: (businessId) => dependencies.branchOfficeRepository.getBranchOffices(businessId: businessId),
           );
         }
 
-        return HomeScreen(
-          contextData: businessContext,
-          onScanPressed: () => _openCaptureFlow(context, businessContext),
-          onHistoryPressed: () => _openHistory(context),
-          onEditContextPressed: () => _openContextEditor(context, businessContext),
+        return FutureBuilder<void>(
+          future: dependencies.featureFlagsService.ensureInitialized(),
+          builder: (context, flagSnapshot) {
+            if (flagSnapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            }
+
+            return HomeScreen(
+              contextData: businessContext,
+              showOrderActions: true, //dependencies.featureFlagsService.isOrderCreationEnabled,
+              onScanPressed: () => _openCaptureFlow(context, businessContext),
+              onHistoryPressed: () => _openHistory(context),
+              onEditContextPressed: () => _openContextEditor(context, businessContext),
+            );
+          },
         );
       },
     );
@@ -198,9 +199,7 @@ class _AppRoot extends StatelessWidget {
           title: 'Editar comercio',
           initialContext: businessContext,
           onSave: (payload) => context.read<AppContextCubit>().save(payload),
-          loadBranchOffices: (businessId) => dependencies.branchOfficeRepository.getBranchOffices(
-            businessId: businessId,
-          ),
+          loadBranchOffices: (businessId) => dependencies.branchOfficeRepository.getBranchOffices(businessId: businessId),
         ),
       ),
     );
@@ -213,6 +212,7 @@ class _AppDependencies {
     required this.ordersLocalDataSource,
     required this.appContextRepository,
     required this.branchOfficeRepository,
+    required this.featureFlagsService,
     required this.createOrderFromReceiptUseCase,
     required this.getOrderHistoryUseCase,
     required this.retryFailedOrderUseCase,
@@ -222,16 +222,19 @@ class _AppDependencies {
   final OrdersLocalDataSource ordersLocalDataSource;
   final AppContextRepositoryImpl appContextRepository;
   final BranchOfficeRepository branchOfficeRepository;
+  final FeatureFlagsService featureFlagsService;
   final CreateOrderFromReceiptUseCase createOrderFromReceiptUseCase;
   final GetOrderHistoryUseCase getOrderHistoryUseCase;
   final RetryFailedOrderUseCase retryFailedOrderUseCase;
 
   factory _AppDependencies.create() {
-    final apiConfig = ApiConfig.fromEnvironment();
+    final apiConfig = ApiConfig(baseUrl: 'https://armi-backoffice-backend-681515725483.us-central1.run.app');
     final apiClient = ApiClient(config: apiConfig);
     final remote = OrdersRemoteDataSource(apiClient: apiClient);
+    final uploader = ImageUploadRemoteDataSource(apiClient: apiClient);
     final local = OrdersLocalDataSource();
-    final repository = OrdersRepositoryImpl(remote: remote, local: local);
+    final featureFlagsService = FeatureFlagsService();
+    final repository = OrdersRepositoryImpl(remote: remote, local: local, imageUploader: uploader);
     final createOrderUseCase = CreateOrderFromReceiptUseCase(ordersRepository: repository);
     final branchOfficeRepository = BranchOfficeRepositoryImpl(apiClient: apiClient);
 
@@ -240,6 +243,7 @@ class _AppDependencies {
       ordersLocalDataSource: local,
       appContextRepository: AppContextRepositoryImpl(),
       branchOfficeRepository: branchOfficeRepository,
+      featureFlagsService: featureFlagsService,
       createOrderFromReceiptUseCase: createOrderUseCase,
       getOrderHistoryUseCase: GetOrderHistoryUseCase(repository),
       retryFailedOrderUseCase: RetryFailedOrderUseCase(createOrderUseCase),

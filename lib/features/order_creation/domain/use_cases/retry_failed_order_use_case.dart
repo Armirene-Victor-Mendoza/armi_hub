@@ -17,9 +17,13 @@ class RetryFailedOrderUseCase {
       phone: order.phone,
       businessId: order.businessId,
       storeId: order.storeId,
+      businessName: order.businessName,
+      storeName: order.storeName,
+      city: order.city,
       receiptImagePath: order.receiptImagePath,
       ocrRawText: order.ocrRawText,
       ocrTotal: order.ocrTotal,
+      uploadedImageUrl: order.uploadedImageUrl,
     );
 
     return _createOrderUseCase.submitOrder(draft, existingOrderId: order.id);
