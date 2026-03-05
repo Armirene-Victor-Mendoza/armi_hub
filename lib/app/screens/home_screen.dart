@@ -123,7 +123,7 @@ class HomeScreen extends StatelessWidget {
                           _MenuTile(
                             icon: Icons.history_rounded,
                             title: 'Historial de ordenes',
-                            subtitle: 'Consulta envios y reintentos',
+                            subtitle: 'Consulta envios procesados',
                             color: const Color(0xFF78B8FF),
                             onTap: onHistoryPressed,
                           ),

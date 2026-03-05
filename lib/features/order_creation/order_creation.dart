@@ -8,7 +8,6 @@ export 'domain/entities/upload_image_result.dart';
 export 'domain/repositories/orders_repository.dart';
 export 'domain/use_cases/create_order_from_receipt_use_case.dart';
 export 'domain/use_cases/get_order_history_use_case.dart';
-export 'domain/use_cases/retry_failed_order_use_case.dart';
 export 'data/datasources/image_upload_remote_data_source.dart';
 export 'data/datasources/orders_local_data_source.dart';
 export 'data/datasources/orders_remote_data_source.dart';

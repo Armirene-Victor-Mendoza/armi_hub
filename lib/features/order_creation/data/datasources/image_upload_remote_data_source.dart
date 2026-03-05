@@ -9,6 +9,8 @@ class ImageUploadRemoteDataSource {
   final ApiClient _apiClient;
 
   static const String _uploadUrl = 'https://upload-tickets-kokorico-681515725483.us-central1.run.app';
+  static const String _socketErrorMessage =
+      'Revisa tu conexion a internet e intenta de nuevo.';
 
   Future<UploadImageResult> uploadReceiptImage({required String imagePath}) async {
     try {
@@ -50,7 +52,12 @@ class ImageUploadRemoteDataSource {
         urlImage: urlImage,
       );
     } on ApiException catch (error) {
-      return UploadImageResult(success: false, statusCode: null, responseBodyRaw: '', errorMessage: error.message);
+      return UploadImageResult(
+        success: false,
+        statusCode: null,
+        responseBodyRaw: '',
+        errorMessage: _mapApiErrorMessage(error.message),
+      );
     } on FormatException {
       return const UploadImageResult(
         success: false,
@@ -66,5 +73,20 @@ class ImageUploadRemoteDataSource {
         errorMessage: 'Error inesperado subiendo imagen: $error',
       );
     }
+  }
+
+  String _mapApiErrorMessage(String rawMessage) {
+    if (_looksLikeSocketException(rawMessage)) {
+      return _socketErrorMessage;
+    }
+    return rawMessage;
+  }
+
+  bool _looksLikeSocketException(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('network is unreachable') ||
+        normalized.contains('connection refused');
   }
 }

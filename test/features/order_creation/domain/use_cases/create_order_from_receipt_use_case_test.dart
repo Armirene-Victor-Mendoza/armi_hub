@@ -104,6 +104,8 @@ void main() {
       final repository = _FakeOrdersRepository(
         createOrderResult: const CreateOrderResult(
           success: true,
+          orderCreated: true,
+          manualCreationRequired: false,
           statusCode: 200,
           responseBodyRaw: '{"ok":true}',
           publicOrderId: 'B310211',
@@ -121,22 +123,22 @@ void main() {
       expect(result.publicOrderId, 'B310211');
       expect(result.businessOrderId, '1235160084');
       expect(result.backendStatus, 'CREATED');
+      expect(result.manualCreationRequired, isFalse);
       expect(repository.savedOrders.length, 1);
       expect(repository.updatedOrders.length, 1);
       expect(repository.uploadCalls, 1);
       expect(repository.createCalls, 1);
     });
 
-    test(
-      'marca error cuando backend retorna respuesta de firma sin orden creada',
-      () async {
+    test('marca success manual cuando backend acepta pero no crea orden', () async {
         final repository = _FakeOrdersRepository(
           createOrderResult: const CreateOrderResult(
-            success: false,
+            success: true,
+            orderCreated: false,
+            manualCreationRequired: true,
             statusCode: 200,
             responseBodyRaw: '{"orderResponse":{"status":500}}',
-            errorMessage:
-                'La distancia entre la tienda y el cliente es mayor a 20 km',
+            userMessage: 'Orden Recibida, creación manual',
             backendStatus: '500',
           ),
         );
@@ -146,13 +148,11 @@ void main() {
 
         final result = await useCase.submitOrder(_validDraft());
 
-        expect(result.status, OrderSyncStatus.error);
+        expect(result.status, OrderSyncStatus.success);
         expect(result.publicOrderId, isNull);
         expect(result.backendStatus, '500');
-        expect(
-          result.errorMessage,
-          'La distancia entre la tienda y el cliente es mayor a 20 km',
-        );
+        expect(result.manualCreationRequired, isTrue);
+        expect(result.userMessage, 'Orden Recibida, creación manual');
         expect(repository.createCalls, 1);
       },
     );
@@ -167,6 +167,8 @@ class _FakeOrdersRepository implements OrdersRepository {
            createOrderResult ??
            const CreateOrderResult(
              success: true,
+             orderCreated: true,
+             manualCreationRequired: false,
              statusCode: 200,
              responseBodyRaw: '{}',
            ),

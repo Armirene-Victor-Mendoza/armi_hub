@@ -19,14 +19,12 @@ class ReviewOrderScreen extends StatelessWidget {
     required this.contextData,
     required this.createOrderUseCase,
     required this.onGoToHistory,
-    required this.onScanAnother,
   });
 
   final ReceiptCaptureResult captureResult;
   final BusinessContext contextData;
   final CreateOrderFromReceiptUseCase createOrderUseCase;
   final Future<void> Function() onGoToHistory;
-  final Future<void> Function() onScanAnother;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +35,6 @@ class ReviewOrderScreen extends StatelessWidget {
       child: _ReviewOrderView(
         contextData: contextData,
         onGoToHistory: onGoToHistory,
-        onScanAnother: onScanAnother,
       ),
     );
   }
@@ -47,20 +44,16 @@ class _ReviewOrderView extends StatefulWidget {
   const _ReviewOrderView({
     required this.contextData,
     required this.onGoToHistory,
-    required this.onScanAnother,
   });
 
   final BusinessContext contextData;
   final Future<void> Function() onGoToHistory;
-  final Future<void> Function() onScanAnother;
 
   @override
   State<_ReviewOrderView> createState() => _ReviewOrderViewState();
 }
 
 class _ReviewOrderViewState extends State<_ReviewOrderView> {
-  static const int _maxCreationFailuresInView = 2;
-
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _totalController;
@@ -71,7 +64,6 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
 
   int? _paymentMethod;
   bool _controllersSeeded = false;
-  bool _retryLimitDialogShown = false;
 
   @override
   void initState() {
@@ -96,19 +88,30 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<ReviewOrderCubit, ReviewOrderState>(
-      listenWhen: (previous, current) =>
-          previous.submittedOrder != current.submittedOrder ||
-          previous.creationFailureCount != current.creationFailureCount,
+      listenWhen: (previous, current) => previous.submittedOrder != current.submittedOrder,
       listener: (context, state) async {
-        if (state.creationFailureCount < _maxCreationFailuresInView) {
-          _retryLimitDialogShown = false;
-        } else if (!_retryLimitDialogShown) {
-          _retryLimitDialogShown = true;
-          await _showRetryLimitDialog(context);
-        }
-
         final order = state.submittedOrder;
         if (order == null) return;
+
+        if (order.manualCreationRequired) {
+          await showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Orden recibida'),
+              content: Text(
+                order.userMessage ?? 'Orden Recibida, creación manual',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Aceptar'),
+                ),
+              ],
+            ),
+          );
+          await widget.onGoToHistory();
+          return;
+        }
 
         final isSuccess = order.status == OrderSyncStatus.success;
         final publicOrderId = order.publicOrderId?.trim();
@@ -272,22 +275,10 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
                     const SizedBox(height: 10),
                     Text(state.errorMessage!, style: const TextStyle(color: Colors.red)),
                   ],
-                  if (state.creationFailureCount > 0) ...<Widget>[
-                    const SizedBox(height: 8),
-                    Text(
-                      state.creationFailureCount < _maxCreationFailuresInView
-                          ? 'Tienes 1 reintento adicional disponible.'
-                          : 'Reintentos agotados en esta orden.',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF5C6570)),
-                    ),
-                  ],
                   const SizedBox(height: 14),
                   Builder(
                     builder: (context) {
-                      final canSubmit =
-                          !state.isSubmitting &&
-                          _paymentMethod != null &&
-                          state.creationFailureCount < _maxCreationFailuresInView;
+                      final canSubmit = !state.isSubmitting && _paymentMethod != null;
                       return ElevatedButton.icon(
                         onPressed: !canSubmit
                             ? null
@@ -349,43 +340,6 @@ class _ReviewOrderViewState extends State<_ReviewOrderView> {
       return 'Campo obligatorio';
     }
     return null;
-  }
-
-  Future<void> _showRetryLimitDialog(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => PopScope<void>(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (didPop) return;
-          Navigator.of(dialogContext).pop();
-          widget.onGoToHistory();
-        },
-        child: AlertDialog(
-          title: const Text('Reintentos agotados'),
-          content: const Text(
-            'Ya no puedes crear esta orden desde Revisar. Elige una accion para continuar.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () async {
-                Navigator.of(dialogContext).pop();
-                await widget.onGoToHistory();
-              },
-              child: const Text('Ir a Historial'),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.of(dialogContext).pop();
-                await widget.onScanAnother();
-              },
-              child: const Text('Escanear otra factura'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

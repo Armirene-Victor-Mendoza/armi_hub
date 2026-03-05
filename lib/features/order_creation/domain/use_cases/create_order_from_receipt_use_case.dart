@@ -46,17 +46,15 @@ class CreateOrderFromReceiptUseCase {
   }
 
   Future<ScannedOrder> submitOrder(
-    OrderDraft draft, {
-    String? existingOrderId,
-    int existingCreationFailureCount = 0,
-  }) async {
+    OrderDraft draft,
+  ) async {
     final validationError = draft.validationError;
     if (validationError != null) {
       throw Exception(validationError);
     }
 
     final now = DateTime.now();
-    final orderId = existingOrderId ?? _uuid.v4();
+    final orderId = _uuid.v4();
 
     final uploadResult = await _resolveUploadUrl(draft);
     if (!uploadResult.success ||
@@ -66,14 +64,9 @@ class CreateOrderFromReceiptUseCase {
         now: now,
         draft: draft,
         uploadResult: uploadResult,
-        existingCreationFailureCount: existingCreationFailureCount,
       );
 
-      if (existingOrderId == null) {
-        await _ordersRepository.saveOrderAttempt(failedAttempt);
-      } else {
-        await _ordersRepository.updateOrderAttempt(failedAttempt);
-      }
+      await _ordersRepository.saveOrderAttempt(failedAttempt);
 
       throw Exception(
         uploadResult.errorMessage ??
@@ -106,15 +99,11 @@ class CreateOrderFromReceiptUseCase {
       receiptImagePath: normalizedDraft.receiptImagePath,
       requestJson: jsonEncode(request.toJson()),
       uploadedImageUrl: normalizedDraft.uploadedImageUrl,
-      creationFailureCount: existingCreationFailureCount,
+      manualCreationRequired: false,
       status: OrderSyncStatus.pending,
     );
 
-    if (existingOrderId == null) {
-      await _ordersRepository.saveOrderAttempt(pending);
-    } else {
-      await _ordersRepository.updateOrderAttempt(pending);
-    }
+    await _ordersRepository.saveOrderAttempt(pending);
 
     final result = await _ordersRepository.createSignatureOrder(request);
 
@@ -125,10 +114,9 @@ class CreateOrderFromReceiptUseCase {
       publicOrderId: result.publicOrderId,
       businessOrderId: result.businessOrderId,
       backendStatus: result.backendStatus,
+      manualCreationRequired: result.manualCreationRequired,
+      userMessage: result.userMessage,
       status: result.success ? OrderSyncStatus.success : OrderSyncStatus.error,
-      creationFailureCount: result.success
-          ? pending.creationFailureCount
-          : pending.creationFailureCount + 1,
       errorMessage: result.errorMessage,
       clearErrorMessage: result.success,
     );
@@ -159,7 +147,6 @@ class CreateOrderFromReceiptUseCase {
     required DateTime now,
     required OrderDraft draft,
     required UploadImageResult uploadResult,
-    required int existingCreationFailureCount,
   }) {
     return ScannedOrder(
       id: orderId,
@@ -194,7 +181,7 @@ class CreateOrderFromReceiptUseCase {
       uploadedImageUrl: draft.uploadedImageUrl,
       responseStatusCode: uploadResult.statusCode,
       responseBodyRaw: uploadResult.responseBodyRaw,
-      creationFailureCount: existingCreationFailureCount,
+      manualCreationRequired: false,
       status: OrderSyncStatus.error,
       errorMessage:
           uploadResult.errorMessage ??

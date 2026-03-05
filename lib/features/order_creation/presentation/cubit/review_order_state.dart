@@ -7,37 +7,26 @@ class ReviewOrderState extends Equatable {
     this.initialDraft,
     this.isSubmitting = false,
     this.submittedOrder,
-    this.activeOrderId,
     this.errorMessage,
-    this.creationFailureCount = 0,
   });
 
   final OrderDraft? initialDraft;
   final bool isSubmitting;
   final ScannedOrder? submittedOrder;
-  final String? activeOrderId;
   final String? errorMessage;
-  final int creationFailureCount;
 
   ReviewOrderState copyWith({
     OrderDraft? initialDraft,
     bool? isSubmitting,
     ScannedOrder? submittedOrder,
-    String? activeOrderId,
-    bool clearActiveOrderId = false,
     String? errorMessage,
-    int? creationFailureCount,
     bool clearError = false,
   }) {
     return ReviewOrderState(
       initialDraft: initialDraft ?? this.initialDraft,
       isSubmitting: isSubmitting ?? this.isSubmitting,
       submittedOrder: submittedOrder ?? this.submittedOrder,
-      activeOrderId: clearActiveOrderId
-          ? null
-          : (activeOrderId ?? this.activeOrderId),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      creationFailureCount: creationFailureCount ?? this.creationFailureCount,
     );
   }
 
@@ -46,8 +35,6 @@ class ReviewOrderState extends Equatable {
     initialDraft,
     isSubmitting,
     submittedOrder,
-    activeOrderId,
     errorMessage,
-    creationFailureCount,
   ];
 }

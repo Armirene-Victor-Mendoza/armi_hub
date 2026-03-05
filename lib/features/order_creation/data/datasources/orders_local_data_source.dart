@@ -6,7 +6,7 @@ class OrdersLocalDataSource {
   OrdersLocalDataSource();
 
   static const String _databaseName = 'armi_hub.db';
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 7;
   static const String tableName = 'scanned_orders';
 
   Database? _database;
@@ -47,7 +47,8 @@ class OrdersLocalDataSource {
             public_order_id TEXT,
             business_order_id TEXT,
             backend_status TEXT,
-            creation_failure_count INTEGER NOT NULL DEFAULT 0,
+            manual_creation_required INTEGER NOT NULL DEFAULT 0,
+            user_message TEXT,
             status TEXT NOT NULL,
             error_message TEXT
           )
@@ -94,6 +95,9 @@ class OrdersLocalDataSource {
             "ALTER TABLE $tableName ADD COLUMN creation_failure_count INTEGER NOT NULL DEFAULT 0",
           );
         }
+        if (oldVersion < 7) {
+          await _recreateTableForVersion7(db);
+        }
       },
     );
     await _ensureRequiredColumns(_database!);
@@ -119,8 +123,122 @@ class OrdersLocalDataSource {
     await _ensureColumn(db, columnName: 'backend_status', definition: 'TEXT');
     await _ensureColumn(
       db,
-      columnName: 'creation_failure_count',
+      columnName: 'manual_creation_required',
       definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(db, columnName: 'user_message', definition: 'TEXT');
+  }
+
+  Future<void> _recreateTableForVersion7(Database db) async {
+    const tempTable = '${tableName}_v7_new';
+
+    await db.execute('DROP TABLE IF EXISTS $tempTable');
+    await db.execute('''
+      CREATE TABLE $tempTable (
+        id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        business_id INTEGER NOT NULL,
+        store_id TEXT NOT NULL,
+        business_name TEXT,
+        store_name TEXT,
+        total_value REAL NOT NULL,
+        payment_method INTEGER NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        address TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        city TEXT NOT NULL,
+        ocr_raw_text TEXT NOT NULL,
+        ocr_total REAL,
+        receipt_image_path TEXT NOT NULL,
+        request_json TEXT NOT NULL,
+        url_image TEXT,
+        response_status_code INTEGER,
+        response_body_raw TEXT,
+        public_order_id TEXT,
+        business_order_id TEXT,
+        backend_status TEXT,
+        manual_creation_required INTEGER NOT NULL DEFAULT 0,
+        user_message TEXT,
+        status TEXT NOT NULL,
+        error_message TEXT
+      )
+    ''');
+
+    await db.execute('''
+      INSERT INTO $tempTable (
+        id,
+        created_at,
+        updated_at,
+        business_id,
+        store_id,
+        business_name,
+        store_name,
+        total_value,
+        payment_method,
+        first_name,
+        last_name,
+        address,
+        phone,
+        city,
+        ocr_raw_text,
+        ocr_total,
+        receipt_image_path,
+        request_json,
+        url_image,
+        response_status_code,
+        response_body_raw,
+        public_order_id,
+        business_order_id,
+        backend_status,
+        manual_creation_required,
+        user_message,
+        status,
+        error_message
+      )
+      SELECT
+        id,
+        created_at,
+        updated_at,
+        business_id,
+        store_id,
+        business_name,
+        store_name,
+        total_value,
+        payment_method,
+        first_name,
+        last_name,
+        address,
+        phone,
+        city,
+        ocr_raw_text,
+        ocr_total,
+        receipt_image_path,
+        request_json,
+        url_image,
+        response_status_code,
+        response_body_raw,
+        public_order_id,
+        business_order_id,
+        backend_status,
+        0,
+        NULL,
+        status,
+        error_message
+      FROM $tableName
+    ''');
+
+    await db.execute('DROP TABLE $tableName');
+    await db.execute('ALTER TABLE $tempTable RENAME TO $tableName');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scanned_orders_created_at ON $tableName(created_at)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scanned_orders_status ON $tableName(status)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scanned_orders_business_store ON $tableName(business_id, store_id)',
     );
   }
 

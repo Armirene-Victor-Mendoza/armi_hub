@@ -16,7 +16,6 @@ import 'package:armi_hub/features/order_creation/data/datasources/image_upload_r
 import 'package:armi_hub/features/order_creation/data/repositories/orders_repository_impl.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/create_order_from_receipt_use_case.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/get_order_history_use_case.dart';
-import 'package:armi_hub/features/order_creation/domain/use_cases/retry_failed_order_use_case.dart';
 import 'package:armi_hub/features/order_creation/presentation/screens/history_screen.dart';
 import 'package:armi_hub/features/order_creation/presentation/screens/review_order_screen.dart';
 import 'package:flutter/material.dart';
@@ -176,10 +175,6 @@ class _AppRoot extends StatelessWidget {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                     await _openHistory(context);
                   },
-                  onScanAnother: () async {
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                    await _openCaptureFlow(context, businessContext);
-                  },
                 ),
               ),
             );
@@ -194,7 +189,6 @@ class _AppRoot extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => HistoryScreen(
           getOrderHistoryUseCase: dependencies.getOrderHistoryUseCase,
-          retryFailedOrderUseCase: dependencies.retryFailedOrderUseCase,
         ),
       ),
     );
@@ -223,7 +217,6 @@ class _AppDependencies {
     required this.featureFlagsService,
     required this.createOrderFromReceiptUseCase,
     required this.getOrderHistoryUseCase,
-    required this.retryFailedOrderUseCase,
   });
 
   final ApiClient apiClient;
@@ -233,7 +226,6 @@ class _AppDependencies {
   final FeatureFlagsService featureFlagsService;
   final CreateOrderFromReceiptUseCase createOrderFromReceiptUseCase;
   final GetOrderHistoryUseCase getOrderHistoryUseCase;
-  final RetryFailedOrderUseCase retryFailedOrderUseCase;
 
   factory _AppDependencies.create() {
     final apiConfig = ApiConfig(baseUrl: 'https://armi-backoffice-backend-681515725483.us-central1.run.app');
@@ -254,7 +246,6 @@ class _AppDependencies {
       featureFlagsService: featureFlagsService,
       createOrderFromReceiptUseCase: createOrderUseCase,
       getOrderHistoryUseCase: GetOrderHistoryUseCase(repository),
-      retryFailedOrderUseCase: RetryFailedOrderUseCase(createOrderUseCase),
     );
   }
 

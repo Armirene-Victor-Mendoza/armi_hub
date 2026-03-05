@@ -11,7 +11,7 @@ import 'package:http/testing.dart';
 void main() {
   group('OrdersRemoteDataSource.createSignatureOrder', () {
     test(
-      'retorna error cuando orderResponse tiene status 500 aunque HTTP sea 200',
+      'retorna success manual cuando orderResponse indica no creada y HTTP es 200',
       () async {
         final dataSource = _buildDataSource((_) async {
           return http.Response(
@@ -29,12 +29,12 @@ void main() {
 
         final result = await dataSource.createSignatureOrder(_sampleRequest());
 
-        expect(result.success, isFalse);
+        expect(result.success, isTrue);
+        expect(result.orderCreated, isFalse);
+        expect(result.manualCreationRequired, isTrue);
         expect(result.backendStatus, '500');
-        expect(
-          result.errorMessage,
-          'La distancia entre la tienda y el cliente es mayor a 20 km',
-        );
+        expect(result.errorMessage, isNull);
+        expect(result.userMessage, 'Orden Recibida, creación manual');
       },
     );
 
@@ -60,13 +60,15 @@ void main() {
       final result = await dataSource.createSignatureOrder(_sampleRequest());
 
       expect(result.success, isTrue);
+      expect(result.orderCreated, isTrue);
+      expect(result.manualCreationRequired, isFalse);
       expect(result.publicOrderId, 'B310211');
       expect(result.businessOrderId, '1235160084');
       expect(result.backendStatus, 'CREATED');
       expect(result.errorMessage, isNull);
     });
 
-    test('retorna error si CREATED llega sin orderId', () async {
+    test('retorna success manual si CREATED llega sin orderId', () async {
       final dataSource = _buildDataSource((_) async {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -82,12 +84,15 @@ void main() {
 
       final result = await dataSource.createSignatureOrder(_sampleRequest());
 
-      expect(result.success, isFalse);
+      expect(result.success, isTrue);
+      expect(result.orderCreated, isFalse);
+      expect(result.manualCreationRequired, isTrue);
       expect(result.publicOrderId, isNull);
-      expect(result.errorMessage, 'Firma recibida exitosamente');
+      expect(result.errorMessage, isNull);
+      expect(result.userMessage, 'Orden Recibida, creación manual');
     });
 
-    test('usa fallback cuando orderResponse.error no es JSON valido', () async {
+    test('retorna error tecnico cuando HTTP no es 2xx', () async {
       final dataSource = _buildDataSource((_) async {
         return http.Response(
           jsonEncode(<String, dynamic>{
@@ -97,14 +102,32 @@ void main() {
               'error': 'backend exploded',
             },
           }),
-          200,
+          500,
         );
       });
 
       final result = await dataSource.createSignatureOrder(_sampleRequest());
 
       expect(result.success, isFalse);
+      expect(result.orderCreated, isFalse);
+      expect(result.manualCreationRequired, isFalse);
       expect(result.errorMessage, 'backend exploded');
+    });
+
+    test('mapea SocketException a mensaje de conexion amigable', () async {
+      final dataSource = _buildDataSource((_) async {
+        throw Exception('SocketException: Failed host lookup: example.test');
+      });
+
+      final result = await dataSource.createSignatureOrder(_sampleRequest());
+
+      expect(result.success, isFalse);
+      expect(result.orderCreated, isFalse);
+      expect(result.manualCreationRequired, isFalse);
+      expect(
+        result.errorMessage,
+        'Revisa tu conexion a internet e intenta de nuevo.',
+      );
     });
   });
 }

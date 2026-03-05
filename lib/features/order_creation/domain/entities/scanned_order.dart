@@ -28,7 +28,8 @@ class ScannedOrder {
     this.publicOrderId,
     this.businessOrderId,
     this.backendStatus,
-    this.creationFailureCount = 0,
+    this.manualCreationRequired = false,
+    this.userMessage,
     this.errorMessage,
   });
 
@@ -56,7 +57,8 @@ class ScannedOrder {
   final String? publicOrderId;
   final String? businessOrderId;
   final String? backendStatus;
-  final int creationFailureCount;
+  final bool manualCreationRequired;
+  final String? userMessage;
   final OrderSyncStatus status;
   final String? errorMessage;
 
@@ -77,7 +79,9 @@ class ScannedOrder {
     bool clearBusinessOrderId = false,
     String? backendStatus,
     bool clearBackendStatus = false,
-    int? creationFailureCount,
+    bool? manualCreationRequired,
+    String? userMessage,
+    bool clearUserMessage = false,
     String? errorMessage,
     bool clearErrorMessage = false,
   }) {
@@ -116,7 +120,9 @@ class ScannedOrder {
       backendStatus: clearBackendStatus
           ? null
           : (backendStatus ?? this.backendStatus),
-      creationFailureCount: creationFailureCount ?? this.creationFailureCount,
+      manualCreationRequired:
+          manualCreationRequired ?? this.manualCreationRequired,
+      userMessage: clearUserMessage ? null : (userMessage ?? this.userMessage),
       status: status ?? this.status,
       errorMessage: clearErrorMessage
           ? null
@@ -150,7 +156,8 @@ class ScannedOrder {
       'public_order_id': publicOrderId,
       'business_order_id': businessOrderId,
       'backend_status': backendStatus,
-      'creation_failure_count': creationFailureCount,
+      'manual_creation_required': manualCreationRequired ? 1 : 0,
+      'user_message': userMessage,
       'status': status.value,
       'error_message': errorMessage,
     };
@@ -182,7 +189,9 @@ class ScannedOrder {
       publicOrderId: map['public_order_id'] as String?,
       businessOrderId: map['business_order_id'] as String?,
       backendStatus: map['backend_status'] as String?,
-      creationFailureCount: map['creation_failure_count'] as int? ?? 0,
+      manualCreationRequired:
+          (map['manual_creation_required'] as int? ?? 0) == 1,
+      userMessage: map['user_message'] as String?,
       status: OrderSyncStatusX.fromValue(map['status'] as String? ?? 'error'),
       errorMessage: map['error_message'] as String?,
     );

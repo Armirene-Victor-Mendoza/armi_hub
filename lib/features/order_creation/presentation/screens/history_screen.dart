@@ -2,7 +2,6 @@ import 'package:armi_hub/core/theme/brand_colors.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/scanned_order.dart';
 import 'package:armi_hub/features/order_creation/domain/use_cases/get_order_history_use_case.dart';
-import 'package:armi_hub/features/order_creation/domain/use_cases/retry_failed_order_use_case.dart';
 import 'package:armi_hub/features/order_creation/presentation/cubit/history_cubit.dart';
 import 'package:armi_hub/features/order_creation/presentation/cubit/history_state.dart';
 import 'package:flutter/material.dart';
@@ -10,16 +9,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({super.key, required this.getOrderHistoryUseCase, required this.retryFailedOrderUseCase});
+  const HistoryScreen({super.key, required this.getOrderHistoryUseCase});
 
   final GetOrderHistoryUseCase getOrderHistoryUseCase;
-  final RetryFailedOrderUseCase retryFailedOrderUseCase;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider<HistoryCubit>(
-      create: (_) =>
-          HistoryCubit(getOrderHistoryUseCase: getOrderHistoryUseCase, retryFailedOrderUseCase: retryFailedOrderUseCase)..load(),
+      create: (_) => HistoryCubit(getOrderHistoryUseCase: getOrderHistoryUseCase)..load(),
       child: const _HistoryView(),
     );
   }
@@ -28,7 +25,6 @@ class HistoryScreen extends StatelessWidget {
 class _HistoryView extends StatelessWidget {
   const _HistoryView();
 
-  static const int _maxCreationFailuresInView = 2;
   static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
@@ -52,8 +48,7 @@ class _HistoryView extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               itemBuilder: (context, index) {
                 final item = state.items[index];
-                final isRetrying = state.retryingOrderId == item.id;
-                final isRetryExhausted = item.creationFailureCount >= _maxCreationFailuresInView;
+                final isManual = item.manualCreationRequired;
 
                 return Container(
                   decoration: BoxDecoration(color: BrandColors.card, borderRadius: BorderRadius.circular(16)),
@@ -70,7 +65,7 @@ class _HistoryView extends StatelessWidget {
                                 style: const TextStyle(fontWeight: FontWeight.w700),
                               ),
                             ),
-                            _StatusChip(status: item.status),
+                            _StatusChip(status: item.status, isManual: isManual),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -91,23 +86,13 @@ class _HistoryView extends StatelessWidget {
                         Text('Cliente: ${_clientName(item)}'),
                         Text('Direccion: ${_safeText(item.address)}'),
                         if (item.responseStatusCode != null) Text('HTTP: ${item.responseStatusCode}'),
-                        if ((item.errorMessage ?? '').isNotEmpty)
-                          Text(item.errorMessage!, style: const TextStyle(color: Colors.red)),
-                        if (item.status == OrderSyncStatus.error &&
-                            !isRetryExhausted) ...<Widget>[
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: isRetrying
-                                ? null
-                                : () {
-                                    context.read<HistoryCubit>().retryOrder(item);
-                                  },
-                            icon: isRetrying
-                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Icon(Icons.refresh_rounded),
-                            label: const Text('Reintentar'),
+                        if (isManual && (item.userMessage ?? '').isNotEmpty)
+                          Text(
+                            item.userMessage!,
+                            style: const TextStyle(color: Color(0xFF4C5A6A)),
                           ),
-                        ],
+                        if (!isManual && (item.errorMessage ?? '').isNotEmpty)
+                          Text(item.errorMessage!, style: const TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
@@ -150,25 +135,31 @@ class _HistoryView extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
+  const _StatusChip({required this.status, required this.isManual});
 
   final OrderSyncStatus status;
+  final bool isManual;
 
   @override
   Widget build(BuildContext context) {
     late final Color bg;
     late final String label;
 
-    switch (status) {
-      case OrderSyncStatus.success:
-        bg = BrandColors.mintSoft;
-        label = 'Enviada';
-      case OrderSyncStatus.pending:
-        bg = const Color(0xFFFFF3D8);
-        label = 'Pendiente';
-      case OrderSyncStatus.error:
-        bg = const Color(0xFFFFE5E5);
-        label = 'Error';
+    if (isManual) {
+      bg = const Color(0xFFE4F3FF);
+      label = 'Recibida (manual)';
+    } else {
+      switch (status) {
+        case OrderSyncStatus.success:
+          bg = BrandColors.mintSoft;
+          label = 'Enviada';
+        case OrderSyncStatus.pending:
+          bg = const Color(0xFFFFF3D8);
+          label = 'Pendiente';
+        case OrderSyncStatus.error:
+          bg = const Color(0xFFFFE5E5);
+          label = 'Error';
+      }
     }
 
     return Container(
