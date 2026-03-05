@@ -1,6 +1,8 @@
 import 'package:armi_hub/features/app_context/domain/entities/business_context.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/create_order_request.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/create_order_result.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/order_draft.dart';
+import 'package:armi_hub/features/order_creation/domain/entities/order_status.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/scanned_order.dart';
 import 'package:armi_hub/features/order_creation/domain/entities/upload_image_result.dart';
 import 'package:armi_hub/features/order_creation/domain/repositories/orders_repository.dart';
@@ -11,7 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('CreateOrderFromReceiptUseCase.buildInitialDraft', () {
-    final useCase = CreateOrderFromReceiptUseCase(ordersRepository: _FakeOrdersRepository());
+    final useCase = CreateOrderFromReceiptUseCase(
+      ordersRepository: _FakeOrdersRepository(),
+    );
 
     test('mapea datos OCR a OrderDraft', () {
       const receiptData = ReceiptData(
@@ -41,7 +45,10 @@ void main() {
         storeCity: 'BARRANQUILLA',
       );
 
-      final draft = useCase.buildInitialDraft(captureResult: captureResult, context: context);
+      final draft = useCase.buildInitialDraft(
+        captureResult: captureResult,
+        context: context,
+      );
 
       expect(draft.totalValue, 70900);
       expect(draft.paymentMethod, 2);
@@ -76,20 +83,113 @@ void main() {
         receiptData: receiptData,
       );
 
-      const context = BusinessContext(businessId: 10345, storeId: '5940', storeCity: 'BARRANQUILLA');
+      const context = BusinessContext(
+        businessId: 10345,
+        storeId: '5940',
+        storeCity: 'BARRANQUILLA',
+      );
 
-      final draft = useCase.buildInitialDraft(captureResult: captureResult, context: context);
+      final draft = useCase.buildInitialDraft(
+        captureResult: captureResult,
+        context: context,
+      );
 
       expect(draft.paymentMethod, isNull);
       expect(draft.receiptImagePath, '/tmp/raw.jpg');
     });
   });
+
+  group('CreateOrderFromReceiptUseCase.submitOrder', () {
+    test('guarda orderId publico cuando backend confirma CREATED', () async {
+      final repository = _FakeOrdersRepository(
+        createOrderResult: const CreateOrderResult(
+          success: true,
+          statusCode: 200,
+          responseBodyRaw: '{"ok":true}',
+          publicOrderId: 'B310211',
+          businessOrderId: '1235160084',
+          backendStatus: 'CREATED',
+        ),
+      );
+      final useCase = CreateOrderFromReceiptUseCase(
+        ordersRepository: repository,
+      );
+
+      final result = await useCase.submitOrder(_validDraft());
+
+      expect(result.status, OrderSyncStatus.success);
+      expect(result.publicOrderId, 'B310211');
+      expect(result.businessOrderId, '1235160084');
+      expect(result.backendStatus, 'CREATED');
+      expect(repository.savedOrders.length, 1);
+      expect(repository.updatedOrders.length, 1);
+      expect(repository.uploadCalls, 1);
+      expect(repository.createCalls, 1);
+    });
+
+    test(
+      'marca error cuando backend retorna respuesta de firma sin orden creada',
+      () async {
+        final repository = _FakeOrdersRepository(
+          createOrderResult: const CreateOrderResult(
+            success: false,
+            statusCode: 200,
+            responseBodyRaw: '{"orderResponse":{"status":500}}',
+            errorMessage:
+                'La distancia entre la tienda y el cliente es mayor a 20 km',
+            backendStatus: '500',
+          ),
+        );
+        final useCase = CreateOrderFromReceiptUseCase(
+          ordersRepository: repository,
+        );
+
+        final result = await useCase.submitOrder(_validDraft());
+
+        expect(result.status, OrderSyncStatus.error);
+        expect(result.publicOrderId, isNull);
+        expect(result.backendStatus, '500');
+        expect(
+          result.errorMessage,
+          'La distancia entre la tienda y el cliente es mayor a 20 km',
+        );
+        expect(repository.createCalls, 1);
+      },
+    );
+  });
 }
 
 class _FakeOrdersRepository implements OrdersRepository {
+  _FakeOrdersRepository({
+    CreateOrderResult? createOrderResult,
+    UploadImageResult? uploadResult,
+  }) : _createOrderResult =
+           createOrderResult ??
+           const CreateOrderResult(
+             success: true,
+             statusCode: 200,
+             responseBodyRaw: '{}',
+           ),
+       _uploadResult =
+           uploadResult ??
+           const UploadImageResult(
+             success: true,
+             statusCode: 200,
+             responseBodyRaw: '{}',
+             urlImage: 'https://img.test/ticket.jpg',
+           );
+
+  final CreateOrderResult _createOrderResult;
+  final UploadImageResult _uploadResult;
+  final List<ScannedOrder> savedOrders = <ScannedOrder>[];
+  final List<ScannedOrder> updatedOrders = <ScannedOrder>[];
+  int uploadCalls = 0;
+  int createCalls = 0;
+
   @override
   Future<CreateOrderResult> createSignatureOrder(CreateOrderRequest request) {
-    throw UnimplementedError();
+    createCalls += 1;
+    return Future<CreateOrderResult>.value(_createOrderResult);
   }
 
   @override
@@ -104,16 +204,38 @@ class _FakeOrdersRepository implements OrdersRepository {
 
   @override
   Future<void> saveOrderAttempt(ScannedOrder order) {
-    throw UnimplementedError();
+    savedOrders.add(order);
+    return Future<void>.value();
   }
 
   @override
   Future<void> updateOrderAttempt(ScannedOrder order) {
-    throw UnimplementedError();
+    updatedOrders.add(order);
+    return Future<void>.value();
   }
 
   @override
   Future<UploadImageResult> uploadReceiptImage({required String imagePath}) {
-    throw UnimplementedError();
+    uploadCalls += 1;
+    return Future<UploadImageResult>.value(_uploadResult);
   }
+}
+
+OrderDraft _validDraft() {
+  return const OrderDraft(
+    totalValue: 70900,
+    paymentMethod: 2,
+    firstName: 'ESTEBAN',
+    lastName: 'CAMARGO',
+    address: 'CRA. 13 #152-80, BOGOTA',
+    phone: '3112295481',
+    businessId: 10345,
+    storeId: '5940',
+    businessName: 'Kokorico',
+    storeName: 'Kokorico Buenavista Barranquilla',
+    city: 'BARRANQUILLA',
+    receiptImagePath: '/tmp/ticket.jpg',
+    ocrRawText: 'RAW',
+    uploadedImageUrl: null,
+  );
 }

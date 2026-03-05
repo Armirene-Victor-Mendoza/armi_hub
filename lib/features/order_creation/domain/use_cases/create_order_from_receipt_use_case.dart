@@ -10,12 +10,16 @@ import 'package:armi_hub/features/receipt_capture/domain/entities/receipt_captur
 import 'package:uuid/uuid.dart';
 
 class CreateOrderFromReceiptUseCase {
-  CreateOrderFromReceiptUseCase({required OrdersRepository ordersRepository}) : _ordersRepository = ordersRepository;
+  CreateOrderFromReceiptUseCase({required OrdersRepository ordersRepository})
+    : _ordersRepository = ordersRepository;
 
   final OrdersRepository _ordersRepository;
   final Uuid _uuid = const Uuid();
 
-  OrderDraft buildInitialDraft({required ReceiptCaptureResult captureResult, required BusinessContext context}) {
+  OrderDraft buildInitialDraft({
+    required ReceiptCaptureResult captureResult,
+    required BusinessContext context,
+  }) {
     final receiptData = captureResult.receiptData;
     final detectedTotal = receiptData?.totalValue;
     final preferredUploadPath = captureResult.optimizedImagePath.isNotEmpty
@@ -41,7 +45,11 @@ class CreateOrderFromReceiptUseCase {
     );
   }
 
-  Future<ScannedOrder> submitOrder(OrderDraft draft, {String? existingOrderId}) async {
+  Future<ScannedOrder> submitOrder(
+    OrderDraft draft, {
+    String? existingOrderId,
+    int existingCreationFailureCount = 0,
+  }) async {
     final validationError = draft.validationError;
     if (validationError != null) {
       throw Exception(validationError);
@@ -51,8 +59,15 @@ class CreateOrderFromReceiptUseCase {
     final orderId = existingOrderId ?? _uuid.v4();
 
     final uploadResult = await _resolveUploadUrl(draft);
-    if (!uploadResult.success || (uploadResult.urlImage?.trim().isEmpty ?? true)) {
-      final failedAttempt = _buildUploadFailedOrder(orderId: orderId, now: now, draft: draft, uploadResult: uploadResult);
+    if (!uploadResult.success ||
+        (uploadResult.urlImage?.trim().isEmpty ?? true)) {
+      final failedAttempt = _buildUploadFailedOrder(
+        orderId: orderId,
+        now: now,
+        draft: draft,
+        uploadResult: uploadResult,
+        existingCreationFailureCount: existingCreationFailureCount,
+      );
 
       if (existingOrderId == null) {
         await _ordersRepository.saveOrderAttempt(failedAttempt);
@@ -60,10 +75,15 @@ class CreateOrderFromReceiptUseCase {
         await _ordersRepository.updateOrderAttempt(failedAttempt);
       }
 
-      throw Exception(uploadResult.errorMessage ?? 'No se pudo subir la imagen, intenta de nuevo.');
+      throw Exception(
+        uploadResult.errorMessage ??
+            'No se pudo subir la imagen, intenta de nuevo.',
+      );
     }
 
-    final normalizedDraft = draft.copyWith(uploadedImageUrl: uploadResult.urlImage);
+    final normalizedDraft = draft.copyWith(
+      uploadedImageUrl: uploadResult.urlImage,
+    );
     final request = normalizedDraft.toCreateOrderRequest();
 
     final pending = ScannedOrder(
@@ -86,6 +106,7 @@ class CreateOrderFromReceiptUseCase {
       receiptImagePath: normalizedDraft.receiptImagePath,
       requestJson: jsonEncode(request.toJson()),
       uploadedImageUrl: normalizedDraft.uploadedImageUrl,
+      creationFailureCount: existingCreationFailureCount,
       status: OrderSyncStatus.pending,
     );
 
@@ -101,7 +122,13 @@ class CreateOrderFromReceiptUseCase {
       updatedAt: DateTime.now(),
       responseStatusCode: result.statusCode,
       responseBodyRaw: result.responseBodyRaw,
+      publicOrderId: result.publicOrderId,
+      businessOrderId: result.businessOrderId,
+      backendStatus: result.backendStatus,
       status: result.success ? OrderSyncStatus.success : OrderSyncStatus.error,
+      creationFailureCount: result.success
+          ? pending.creationFailureCount
+          : pending.creationFailureCount + 1,
       errorMessage: result.errorMessage,
       clearErrorMessage: result.success,
     );
@@ -114,10 +141,17 @@ class CreateOrderFromReceiptUseCase {
   Future<UploadImageResult> _resolveUploadUrl(OrderDraft draft) async {
     final cachedUrl = draft.uploadedImageUrl?.trim();
     if (cachedUrl != null && cachedUrl.isNotEmpty) {
-      return UploadImageResult(success: true, statusCode: null, responseBodyRaw: '', urlImage: cachedUrl);
+      return UploadImageResult(
+        success: true,
+        statusCode: null,
+        responseBodyRaw: '',
+        urlImage: cachedUrl,
+      );
     }
 
-    return _ordersRepository.uploadReceiptImage(imagePath: draft.receiptImagePath);
+    return _ordersRepository.uploadReceiptImage(
+      imagePath: draft.receiptImagePath,
+    );
   }
 
   ScannedOrder _buildUploadFailedOrder({
@@ -125,6 +159,7 @@ class CreateOrderFromReceiptUseCase {
     required DateTime now,
     required OrderDraft draft,
     required UploadImageResult uploadResult,
+    required int existingCreationFailureCount,
   }) {
     return ScannedOrder(
       id: orderId,
@@ -159,8 +194,11 @@ class CreateOrderFromReceiptUseCase {
       uploadedImageUrl: draft.uploadedImageUrl,
       responseStatusCode: uploadResult.statusCode,
       responseBodyRaw: uploadResult.responseBodyRaw,
+      creationFailureCount: existingCreationFailureCount,
       status: OrderSyncStatus.error,
-      errorMessage: uploadResult.errorMessage ?? 'No se pudo subir la imagen, intenta de nuevo.',
+      errorMessage:
+          uploadResult.errorMessage ??
+          'No se pudo subir la imagen, intenta de nuevo.',
     );
   }
 }

@@ -25,6 +25,10 @@ class ScannedOrder {
     this.ocrTotal,
     this.responseStatusCode,
     this.responseBodyRaw,
+    this.publicOrderId,
+    this.businessOrderId,
+    this.backendStatus,
+    this.creationFailureCount = 0,
     this.errorMessage,
   });
 
@@ -49,6 +53,10 @@ class ScannedOrder {
   final String? uploadedImageUrl;
   final int? responseStatusCode;
   final String? responseBodyRaw;
+  final String? publicOrderId;
+  final String? businessOrderId;
+  final String? backendStatus;
+  final int creationFailureCount;
   final OrderSyncStatus status;
   final String? errorMessage;
 
@@ -63,6 +71,13 @@ class ScannedOrder {
     bool clearStoreName = false,
     String? uploadedImageUrl,
     bool clearUploadedImageUrl = false,
+    String? publicOrderId,
+    bool clearPublicOrderId = false,
+    String? businessOrderId,
+    bool clearBusinessOrderId = false,
+    String? backendStatus,
+    bool clearBackendStatus = false,
+    int? creationFailureCount,
     String? errorMessage,
     bool clearErrorMessage = false,
   }) {
@@ -72,7 +87,9 @@ class ScannedOrder {
       updatedAt: updatedAt ?? this.updatedAt,
       businessId: businessId,
       storeId: storeId,
-      businessName: clearBusinessName ? null : (businessName ?? this.businessName),
+      businessName: clearBusinessName
+          ? null
+          : (businessName ?? this.businessName),
       storeName: clearStoreName ? null : (storeName ?? this.storeName),
       totalValue: totalValue,
       paymentMethod: paymentMethod,
@@ -85,11 +102,25 @@ class ScannedOrder {
       ocrTotal: ocrTotal,
       receiptImagePath: receiptImagePath,
       requestJson: requestJson,
-      uploadedImageUrl: clearUploadedImageUrl ? null : (uploadedImageUrl ?? this.uploadedImageUrl),
+      uploadedImageUrl: clearUploadedImageUrl
+          ? null
+          : (uploadedImageUrl ?? this.uploadedImageUrl),
       responseStatusCode: responseStatusCode ?? this.responseStatusCode,
       responseBodyRaw: responseBodyRaw ?? this.responseBodyRaw,
+      publicOrderId: clearPublicOrderId
+          ? null
+          : (publicOrderId ?? this.publicOrderId),
+      businessOrderId: clearBusinessOrderId
+          ? null
+          : (businessOrderId ?? this.businessOrderId),
+      backendStatus: clearBackendStatus
+          ? null
+          : (backendStatus ?? this.backendStatus),
+      creationFailureCount: creationFailureCount ?? this.creationFailureCount,
       status: status ?? this.status,
-      errorMessage: clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
     );
   }
 
@@ -116,6 +147,10 @@ class ScannedOrder {
       'url_image': uploadedImageUrl,
       'response_status_code': responseStatusCode,
       'response_body_raw': responseBodyRaw,
+      'public_order_id': publicOrderId,
+      'business_order_id': businessOrderId,
+      'backend_status': backendStatus,
+      'creation_failure_count': creationFailureCount,
       'status': status.value,
       'error_message': errorMessage,
     };
@@ -144,6 +179,10 @@ class ScannedOrder {
       uploadedImageUrl: map['url_image'] as String?,
       responseStatusCode: map['response_status_code'] as int?,
       responseBodyRaw: map['response_body_raw'] as String?,
+      publicOrderId: map['public_order_id'] as String?,
+      businessOrderId: map['business_order_id'] as String?,
+      backendStatus: map['backend_status'] as String?,
+      creationFailureCount: map['creation_failure_count'] as int? ?? 0,
       status: OrderSyncStatusX.fromValue(map['status'] as String? ?? 'error'),
       errorMessage: map['error_message'] as String?,
     );

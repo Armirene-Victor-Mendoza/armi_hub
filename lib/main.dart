@@ -172,6 +172,14 @@ class _AppRoot extends StatelessWidget {
                   captureResult: captureResult,
                   contextData: businessContext,
                   createOrderUseCase: dependencies.createOrderFromReceiptUseCase,
+                  onGoToHistory: () async {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    await _openHistory(context);
+                  },
+                  onScanAnother: () async {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    await _openCaptureFlow(context, businessContext);
+                  },
                 ),
               ),
             );

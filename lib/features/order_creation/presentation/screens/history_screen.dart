@@ -10,11 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({
-    super.key,
-    required this.getOrderHistoryUseCase,
-    required this.retryFailedOrderUseCase,
-  });
+  const HistoryScreen({super.key, required this.getOrderHistoryUseCase, required this.retryFailedOrderUseCase});
 
   final GetOrderHistoryUseCase getOrderHistoryUseCase;
   final RetryFailedOrderUseCase retryFailedOrderUseCase;
@@ -22,10 +18,8 @@ class HistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<HistoryCubit>(
-      create: (_) => HistoryCubit(
-        getOrderHistoryUseCase: getOrderHistoryUseCase,
-        retryFailedOrderUseCase: retryFailedOrderUseCase,
-      )..load(),
+      create: (_) =>
+          HistoryCubit(getOrderHistoryUseCase: getOrderHistoryUseCase, retryFailedOrderUseCase: retryFailedOrderUseCase)..load(),
       child: const _HistoryView(),
     );
   }
@@ -34,6 +28,7 @@ class HistoryScreen extends StatelessWidget {
 class _HistoryView extends StatelessWidget {
   const _HistoryView();
 
+  static const int _maxCreationFailuresInView = 2;
   static final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
@@ -58,12 +53,10 @@ class _HistoryView extends StatelessWidget {
               itemBuilder: (context, index) {
                 final item = state.items[index];
                 final isRetrying = state.retryingOrderId == item.id;
+                final isRetryExhausted = item.creationFailureCount >= _maxCreationFailuresInView;
 
                 return Container(
-                  decoration: BoxDecoration(
-                    color: BrandColors.card,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  decoration: BoxDecoration(color: BrandColors.card, borderRadius: BorderRadius.circular(16)),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -87,7 +80,7 @@ class _HistoryView extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Orden local ${item.id}',
+                          _orderReference(item),
                           style: const TextStyle(color: Color(0xFF5C6570), fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 4),
@@ -100,7 +93,8 @@ class _HistoryView extends StatelessWidget {
                         if (item.responseStatusCode != null) Text('HTTP: ${item.responseStatusCode}'),
                         if ((item.errorMessage ?? '').isNotEmpty)
                           Text(item.errorMessage!, style: const TextStyle(color: Colors.red)),
-                        if (item.status == OrderSyncStatus.error) ...<Widget>[
+                        if (item.status == OrderSyncStatus.error &&
+                            !isRetryExhausted) ...<Widget>[
                           const SizedBox(height: 8),
                           ElevatedButton.icon(
                             onPressed: isRetrying
@@ -109,11 +103,7 @@ class _HistoryView extends StatelessWidget {
                                     context.read<HistoryCubit>().retryOrder(item);
                                   },
                             icon: isRetrying
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                                 : const Icon(Icons.refresh_rounded),
                             label: const Text('Reintentar'),
                           ),
@@ -149,6 +139,14 @@ class _HistoryView extends StatelessWidget {
     final trimmed = value.trim();
     return trimmed.isEmpty ? 'Sin direccion' : trimmed;
   }
+
+  String _orderReference(ScannedOrder item) {
+    final publicOrderId = item.publicOrderId?.trim() ?? '';
+    if (publicOrderId.isNotEmpty) {
+      return 'Orden #$publicOrderId';
+    }
+    return item.status == OrderSyncStatus.success ? 'Sin ID publico' : 'Orden no creada';
+  }
 }
 
 class _StatusChip extends StatelessWidget {
@@ -175,10 +173,7 @@ class _StatusChip extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
     );
   }

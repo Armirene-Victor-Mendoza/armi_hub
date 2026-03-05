@@ -26,6 +26,10 @@ class RetryFailedOrderUseCase {
       uploadedImageUrl: order.uploadedImageUrl,
     );
 
-    return _createOrderUseCase.submitOrder(draft, existingOrderId: order.id);
+    return _createOrderUseCase.submitOrder(
+      draft,
+      existingOrderId: order.id,
+      existingCreationFailureCount: order.creationFailureCount,
+    );
   }
 }

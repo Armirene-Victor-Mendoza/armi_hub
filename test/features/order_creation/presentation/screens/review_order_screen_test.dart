@@ -45,6 +45,8 @@ void main() {
           captureResult: captureResult,
           contextData: contextData,
           createOrderUseCase: useCase,
+          onGoToHistory: () async {},
+          onScanAnother: () async {},
         ),
       ),
     );
