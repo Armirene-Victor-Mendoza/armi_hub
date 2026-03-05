@@ -1,4 +1,4 @@
-package com.example.armi_hub
+package com.armirene.armihub
 
 import io.flutter.embedding.android.FlutterActivity
 
